@@ -269,7 +269,7 @@ def adopt_proposal(proposal_id: int, req: AdoptRequest):
 
     conn = db.connect()
     conn.execute(
-        "UPDATE workflows SET status='converted', is_proposed=0 WHERE id=?", (proposal_id,)
+        "UPDATE workflows SET status='active', is_proposed=0 WHERE id=?", (proposal_id,)
     )
     if req.steps is not None:
         conn.execute(

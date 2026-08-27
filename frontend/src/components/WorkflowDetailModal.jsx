@@ -106,6 +106,19 @@ export default function WorkflowDetailModal({
               <span style={{ fontSize: "12px", color: "#64748b" }}>
                 {steps.length} step{steps.length !== 1 ? "s" : ""}
               </span>
+              {workflow.status === "created" || (workflow.is_proposed && workflow.status !== "review") ? (
+                <span style={{ fontSize: "11px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "2px 8px", borderRadius: "100px" }}>
+                  ⚡ CREATED
+                </span>
+              ) : workflow.status === "review" ? (
+                <span style={{ fontSize: "11px", fontWeight: 700, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", padding: "2px 8px", borderRadius: "100px" }}>
+                  ⚠ NEEDS REVIEW
+                </span>
+              ) : (
+                <span style={{ fontSize: "11px", fontWeight: 700, background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", padding: "2px 8px", borderRadius: "100px" }}>
+                  ✓ ACTIVE
+                </span>
+              )}
             </div>
             <h2 className="modal-title" style={{ fontSize: "20px", margin: "2px 0 4px 0" }}>{workflow.name}</h2>
             <p className="modal-desc" style={{ margin: 0, fontSize: "13px" }}>{workflow.description}</p>
@@ -182,9 +195,9 @@ export default function WorkflowDetailModal({
                 }
               }}
               disabled={converting}
-              style={{ fontWeight: 700, fontSize: "12px", padding: "6px 14px" }}
+              style={{ fontWeight: 700, fontSize: "12px", padding: "6px 14px", background: "#10b981", color: "#ffffff", border: "none" }}
             >
-              {converting ? <Spinner /> : "✓ Direct Execution (Convert)"}
+              {converting ? <Spinner /> : "✓ Direct Execution"}
             </button>
 
             <button

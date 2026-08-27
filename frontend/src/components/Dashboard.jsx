@@ -18,20 +18,19 @@ function WorkflowCard({ workflow, onClick }) {
     (workflow.leads_to?.length || 0) + (workflow.depends_on?.length || 0);
   const previewSteps = (workflow.steps || []).slice(0, 4);
 
-  const isCreated = workflow.status === "created" || (workflow.is_proposed && workflow.status !== "review" && workflow.status !== "converted");
   const isReview = workflow.status === "review" || workflow.status === "needs_review";
-  const isConverted = workflow.status === "converted";
+  const isCreated = (workflow.status === "created" || (workflow.is_proposed && workflow.status !== "active")) && !isReview;
 
   return (
     <div
-      className={`workflow-card ${isReview ? "needs-review-card" : isCreated ? "created-card" : isConverted ? "converted-card" : ""}`}
+      className={`workflow-card ${isReview ? "needs-review-card" : isCreated ? "created-card" : ""}`}
       onClick={() => onClick(workflow)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick(workflow)}
       aria-label={`View details for ${workflow.name}`}
       style={{
-        borderLeft: isReview ? "4px solid #ef4444" : isCreated ? "4px solid #f59e0b" : isConverted ? "4px solid #10b981" : undefined
+        borderLeft: isReview ? "4px solid #ef4444" : isCreated ? "4px solid #f59e0b" : "4px solid #10b981"
       }}
     >
       <div className="wf-card-header">
@@ -43,10 +42,6 @@ function WorkflowCard({ workflow, onClick }) {
         ) : isReview ? (
           <span style={{ fontSize: "11px", fontWeight: 700, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", padding: "2px 8px", borderRadius: "100px" }}>
             ⚠ NEEDS REVIEW
-          </span>
-        ) : isConverted ? (
-          <span style={{ fontSize: "11px", fontWeight: 700, background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", padding: "2px 8px", borderRadius: "100px" }}>
-            ✓ CONVERTED
           </span>
         ) : (
           <StatusDot status="Active" />
