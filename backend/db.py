@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     description    TEXT    NOT NULL DEFAULT '',
     steps          TEXT    NOT NULL,   -- JSON array of {name, description}
     business_rules TEXT    NOT NULL DEFAULT '[]',  -- JSON array of {condition, path}
-    status         TEXT    NOT NULL DEFAULT 'active',
+    status         TEXT    NOT NULL DEFAULT 'created',
     is_proposed    INTEGER NOT NULL DEFAULT 0,
     created_at     TEXT    NOT NULL
 );
@@ -542,7 +542,7 @@ def _seed():
     key_to_id = {}
     for wf in SEED_WORKFLOWS:
         saved = insert_workflow(
-            {k: v for k, v in wf.items() if k != "key"}, status="active"
+            {k: v for k, v in wf.items() if k != "key"}, status="created"
         )
         key_to_id[wf["key"]] = saved["id"]
 

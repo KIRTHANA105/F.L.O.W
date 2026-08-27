@@ -551,7 +551,7 @@ def seed_sample_workflows():
             {"name": "Assign Contact Owner", "operation_id": "hubspot.assign_owner"},
         ],
         "business_rules": [],
-        "status": "active",
+        "status": "created",
         "is_proposed": False,
     }
     sample_b = {
@@ -563,7 +563,7 @@ def seed_sample_workflows():
             {"name": "Update Contact Record", "operation_id": "hubspot.update_contact"},
         ],
         "business_rules": [],
-        "status": "active",
+        "status": "created",
         "is_proposed": False,
     }
     sample_c = {
@@ -575,7 +575,7 @@ def seed_sample_workflows():
             {"name": "Append Row to Sheet", "operation_id": "sheets.append_row"},
         ],
         "business_rules": [],
-        "status": "active",
+        "status": "created",
         "is_proposed": False,
     }
 
@@ -586,9 +586,9 @@ def seed_sample_workflows():
         if wf.get("name") in sample_names:
             db.delete_workflow(wf["id"])
 
-    saved_a = db.insert_workflow(sample_a, status="active", is_proposed=False)
-    saved_b = db.insert_workflow(sample_b, status="active", is_proposed=False)
-    saved_c = db.insert_workflow(sample_c, status="active", is_proposed=False)
+    saved_a = db.insert_workflow(sample_a, status="created", is_proposed=False)
+    saved_b = db.insert_workflow(sample_b, status="created", is_proposed=False)
+    saved_c = db.insert_workflow(sample_c, status="created", is_proposed=False)
     graph.invalidate_graph_cache()
 
     return {
