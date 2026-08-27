@@ -180,7 +180,7 @@ def analyze_workflow(req: AnalyzeRequest):
         raise HTTPException(status_code=502, detail=str(exc))
 
     STATS["llm_calls"] += 1
-    saved = db.insert_workflow(parsed, status="proposed", is_proposed=True)
+    saved = db.insert_workflow(parsed, status="created", is_proposed=True)
     graph.invalidate_graph_cache()
     return {"proposal": saved, "raw_text": text}
 
@@ -269,7 +269,7 @@ def adopt_proposal(proposal_id: int, req: AdoptRequest):
 
     conn = db.connect()
     conn.execute(
-        "UPDATE workflows SET status='active', is_proposed=0 WHERE id=?", (proposal_id,)
+        "UPDATE workflows SET status='converted', is_proposed=0 WHERE id=?", (proposal_id,)
     )
     if req.steps is not None:
         conn.execute(
@@ -285,6 +285,27 @@ def adopt_proposal(proposal_id: int, req: AdoptRequest):
 
     graph.invalidate_graph_cache()
     return {"workflow": db.get_workflow(proposal_id)}
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str
+
+
+@app.post("/api/workflows/{workflow_id}/status")
+def update_workflow_status(workflow_id: int, req: StatusUpdateRequest):
+    wf = db.get_workflow(workflow_id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="No such workflow.")
+    conn = db.connect()
+    is_prop = 0 if req.status in ("converted", "active") else 1
+    conn.execute(
+        "UPDATE workflows SET status=?, is_proposed=? WHERE id=?",
+        (req.status, is_prop, workflow_id)
+    )
+    conn.commit()
+    conn.close()
+    graph.invalidate_graph_cache()
+    return {"id": workflow_id, "status": req.status}
 
 
 @app.post("/api/workflows/{proposal_id}/reject")
@@ -466,6 +487,15 @@ def run_workflow_simulation(workflow_id: int):
     if wf is None:
         raise HTTPException(status_code=404, detail="No such workflow.")
     report = simulation.run_simulation(wf)
+    
+    # If simulation found issues or faults, mark workflow as needing review
+    failed = report.get("failed_scenarios", 0) or report.get("outcomes", {}).get("failed_or_terminated_early", 0)
+    conn = db.connect()
+    if failed > 0:
+        conn.execute("UPDATE workflows SET status='review' WHERE id=?", (workflow_id,))
+    conn.commit()
+    conn.close()
+    
     return report
 
 

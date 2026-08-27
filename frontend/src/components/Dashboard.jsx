@@ -18,18 +18,39 @@ function WorkflowCard({ workflow, onClick }) {
     (workflow.leads_to?.length || 0) + (workflow.depends_on?.length || 0);
   const previewSteps = (workflow.steps || []).slice(0, 4);
 
+  const isCreated = workflow.status === "created" || (workflow.is_proposed && workflow.status !== "review" && workflow.status !== "converted");
+  const isReview = workflow.status === "review" || workflow.status === "needs_review";
+  const isConverted = workflow.status === "converted";
+
   return (
     <div
-      className="workflow-card"
+      className={`workflow-card ${isReview ? "needs-review-card" : isCreated ? "created-card" : isConverted ? "converted-card" : ""}`}
       onClick={() => onClick(workflow)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick(workflow)}
       aria-label={`View details for ${workflow.name}`}
+      style={{
+        borderLeft: isReview ? "4px solid #ef4444" : isCreated ? "4px solid #f59e0b" : isConverted ? "4px solid #10b981" : undefined
+      }}
     >
       <div className="wf-card-header">
         <DepartmentBadge department={workflow.department} />
-        <StatusDot status="Active" />
+        {isCreated ? (
+          <span style={{ fontSize: "11px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "2px 8px", borderRadius: "100px" }}>
+            ⚡ CREATED
+          </span>
+        ) : isReview ? (
+          <span style={{ fontSize: "11px", fontWeight: 700, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", padding: "2px 8px", borderRadius: "100px" }}>
+            ⚠ NEEDS REVIEW
+          </span>
+        ) : isConverted ? (
+          <span style={{ fontSize: "11px", fontWeight: 700, background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", padding: "2px 8px", borderRadius: "100px" }}>
+            ✓ CONVERTED
+          </span>
+        ) : (
+          <StatusDot status="Active" />
+        )}
       </div>
 
       <h3 className="wf-card-name">{workflow.name}</h3>
@@ -75,6 +96,9 @@ export default function Dashboard({
   workflows,
   onRefresh,
   onCreateWorkflow,
+  onAdopt,
+  onNavigateToSim,
+  onRecalculate,
   triggerAiGlow,
   justDeployed,
 }) {
@@ -151,6 +175,11 @@ export default function Dashboard({
         <WorkflowDetailModal
           workflow={selectedWorkflow}
           onClose={() => setSelectedWorkflow(null)}
+          onAdopt={onAdopt}
+          onNavigateToSim={onNavigateToSim}
+          onRecalculate={onRecalculate}
+          onRefresh={onRefresh}
+          triggerAiGlow={triggerAiGlow}
         />
       )}
 

@@ -177,6 +177,9 @@ export default function App() {
           workflows={workflows}
           onRefresh={refresh}
           onCreateWorkflow={handleWorkflowResult}
+          onAdopt={handleAdopt}
+          onNavigateToSim={handleNavigateToSimulation}
+          onRecalculate={handleWorkflowResult}
           triggerAiGlow={triggerAiGlow}
           justDeployed={justDeployed}
         />

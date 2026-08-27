@@ -2,19 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { DepartmentBadge, Spinner } from "./Shared";
 import WorkflowCanvasModal, { WorkflowCanvasView } from "./WorkflowCanvasModal";
+import CreateWorkflowModal from "./CreateWorkflowModal";
 
 /**
  * Modal showing the full workflow detail:
  * - Embedded n8n-style visual node graph canvas
  * - Architecture sequence step blocks
  * - Business Rules & Decision Gates
+ * - Direct Automation vs Simulation Action Gate
  */
-export default function WorkflowDetailModal({ workflow, onClose, onNavigateToSim }) {
+export default function WorkflowDetailModal({
+  workflow,
+  onClose,
+  onNavigateToSim,
+  onAdopt,
+  onRecalculate,
+  onRefresh,
+  triggerAiGlow,
+}) {
   const ref = useRef(null);
-  const [activeTab, setActiveTab] = useState("canvas"); // "canvas" | "steps" | "rules"
+  const [activeTab, setActiveTab] = useState("steps"); // Default to steps view as shown in user screenshot
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [catalog, setCatalog] = useState(null);
   const [simReport, setSimReport] = useState(null);
+  const [rec, setRec] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [loadingMetadata, setLoadingMetadata] = useState(true);
 
   // Close on backdrop click
@@ -29,18 +42,20 @@ export default function WorkflowDetailModal({ workflow, onClose, onNavigateToSim
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Load catalog and simulation trace on mount
+  // Load catalog, simulation trace, and recommendation on mount
   useEffect(() => {
     async function loadMeta() {
       if (!workflow?.id) return;
       try {
         setLoadingMetadata(true);
-        const [catData, simData] = await Promise.all([
+        const [catData, simData, recData] = await Promise.all([
           api.getCatalog().catch(() => ({ actions: [], triggers: [] })),
           api.getLastSimulation(workflow.id).catch(() => null),
+          api.getRecommendation(workflow.id).catch(() => null),
         ]);
         setCatalog(catData);
         setSimReport(simData);
+        setRec(recData);
       } catch (err) {
         console.error("Failed to load workflow metadata", err);
       } finally {
@@ -107,6 +122,77 @@ export default function WorkflowDetailModal({ workflow, onClose, onNavigateToSim
             </button>
             <button className="modal-close" onClick={onClose} aria-label="Close">
               ✕
+            </button>
+          </div>
+        </div>
+
+        {/* AI Suggestion & Direct Execution / Simulation Action Bar */}
+        <div
+          style={{
+            background: rec?.tier === "DIRECT" ? "rgba(16, 185, 129, 0.06)" : "rgba(99, 102, 241, 0.05)",
+            borderBottom: "1px solid #e2e8f0",
+            padding: "12px 24px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "18px" }}>{rec?.tier === "DIRECT" ? "✓" : "💡"}</span>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: rec?.tier === "DIRECT" ? "#166534" : "#312e81" }}>
+                AI Suggestion: {rec?.tier === "DIRECT" ? "Safe for Direct Automation Execution" : `Simulation Recommended (${rec?.tier || "STANDARD"} Verification Tier)`}
+              </div>
+              <div style={{ fontSize: "11px", color: "#64748b" }}>
+                {rec?.headline || "Review architecture steps or run virtual simulation to stress test boundary paths."}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              className="btn primary btn-sm"
+              onClick={() => {
+                onClose();
+                onNavigateToSim?.(workflow.id);
+              }}
+              style={{ fontWeight: 600, fontSize: "12px", padding: "6px 14px" }}
+            >
+              ⚡ Go for Simulation
+            </button>
+
+            <button
+              className="btn success btn-sm"
+              onClick={async () => {
+                setConverting(true);
+                try {
+                  if (onAdopt) {
+                    await onAdopt(workflow);
+                  } else {
+                    await api.adoptWorkflow(workflow.id);
+                  }
+                  onClose();
+                  onRefresh?.();
+                } catch (e) {
+                  console.error(e);
+                } finally {
+                  setConverting(false);
+                }
+              }}
+              disabled={converting}
+              style={{ fontWeight: 700, fontSize: "12px", padding: "6px 14px" }}
+            >
+              {converting ? <Spinner /> : "✓ Direct Execution (Convert)"}
+            </button>
+
+            <button
+              className="btn secondary btn-sm"
+              onClick={() => setShowEditModal(true)}
+              style={{ fontSize: "12px", padding: "6px 12px" }}
+            >
+              ✏ Edit Workflow
             </button>
           </div>
         </div>
@@ -265,6 +351,20 @@ export default function WorkflowDetailModal({ workflow, onClose, onNavigateToSim
           )}
         </div>
       </div>
+
+      {/* Edit Workflow Modal */}
+      {showEditModal && (
+        <CreateWorkflowModal
+          initialText={`${workflow.name}: ${workflow.description}`}
+          onClose={() => setShowEditModal(false)}
+          onResult={(res) => {
+            setShowEditModal(false);
+            onClose();
+            onRecalculate?.(res);
+          }}
+          triggerAiGlow={triggerAiGlow}
+        />
+      )}
     </div>
   );
 }

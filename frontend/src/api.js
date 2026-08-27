@@ -52,6 +52,12 @@ export const api = {
       }),
     }),
 
+  updateWorkflowStatus: (workflowId, status) =>
+    request(`/api/workflows/${workflowId}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    }),
+
   rejectWorkflow: (proposalId) =>
     request(`/api/workflows/${proposalId}/reject`, { method: "POST" }),
 
