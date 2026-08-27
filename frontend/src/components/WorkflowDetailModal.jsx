@@ -106,7 +106,11 @@ export default function WorkflowDetailModal({
               <span style={{ fontSize: "12px", color: "#64748b" }}>
                 {steps.length} step{steps.length !== 1 ? "s" : ""}
               </span>
-              {workflow.status === "created" || (workflow.is_proposed && workflow.status !== "review") ? (
+              {workflow.status === "in_progress" ? (
+                <span style={{ fontSize: "11px", fontWeight: 700, background: "#e0e7ff", color: "#4338ca", border: "1px solid #c7d2fe", padding: "2px 8px", borderRadius: "100px" }}>
+                  ⚡ IN PROGRESS
+                </span>
+              ) : workflow.status === "created" || (workflow.is_proposed && workflow.status !== "review" && workflow.status !== "active") ? (
                 <span style={{ fontSize: "11px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "2px 8px", borderRadius: "100px" }}>
                   ⚡ CREATED
                 </span>
@@ -167,7 +171,13 @@ export default function WorkflowDetailModal({
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <button
               className="btn primary btn-sm"
-              onClick={() => {
+              onClick={async () => {
+                try {
+                  await api.updateWorkflowStatus(workflow.id, "in_progress");
+                  onRefresh?.();
+                } catch (err) {
+                  console.error("Failed to set in_progress status", err);
+                }
                 onClose();
                 onNavigateToSim?.(workflow.id);
               }}

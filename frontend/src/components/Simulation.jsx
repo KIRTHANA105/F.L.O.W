@@ -48,12 +48,23 @@ export default function Simulation({
     try {
       setLoading(true);
       const res = await api.listWorkflows(true); // include proposed workflows
-      let wfs = res.workflows || [];
-      if (decisionPending?.proposal && !wfs.some((w) => w.id === decisionPending.proposal.id)) {
-        wfs = [decisionPending.proposal, ...wfs];
+      let allWfs = res.workflows || [];
+      if (decisionPending?.proposal && !allWfs.some((w) => w.id === decisionPending.proposal.id)) {
+        allWfs = [decisionPending.proposal, ...allWfs];
       }
-      setWorkflows(wfs);
-      setSelectedWfId((prev) => initialWorkflowId || prev || (wfs[0]?.id ?? null));
+      // ONLY include workflows that are actively queued/sent for simulation
+      const simWfs = allWfs.filter(
+        (w) =>
+          w.status === "in_progress" ||
+          w.status === "simulating" ||
+          w.status === "review" ||
+          w.status === "needs_review" ||
+          w.id === initialWorkflowId ||
+          (decisionPending?.proposal?.id === w.id)
+      );
+      setWorkflows(simWfs);
+      const targetId = initialWorkflowId || simWfs[0]?.id || null;
+      setSelectedWfId(targetId);
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load workflows");

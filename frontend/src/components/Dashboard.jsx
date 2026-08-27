@@ -19,23 +19,34 @@ function WorkflowCard({ workflow, onClick }) {
   const previewSteps = (workflow.steps || []).slice(0, 4);
 
   const isReview = workflow.status === "review" || workflow.status === "needs_review";
-  const isCreated = (workflow.status === "created" || (workflow.is_proposed && workflow.status !== "active")) && !isReview;
+  const isInProgress = workflow.status === "in_progress" || workflow.status === "simulating";
+  const isCreated = (workflow.status === "created" || (workflow.is_proposed && workflow.status !== "active")) && !isReview && !isInProgress;
 
   return (
     <div
-      className={`workflow-card ${isReview ? "needs-review-card" : isCreated ? "created-card" : ""}`}
+      className={`workflow-card ${isReview ? "needs-review-card" : isInProgress ? "in-progress-card" : isCreated ? "created-card" : ""}`}
       onClick={() => onClick(workflow)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick(workflow)}
       aria-label={`View details for ${workflow.name}`}
       style={{
-        borderLeft: isReview ? "4px solid #ef4444" : isCreated ? "4px solid #f59e0b" : "4px solid #10b981"
+        borderLeft: isReview
+          ? "4px solid #ef4444"
+          : isInProgress
+          ? "4px solid #6366f1"
+          : isCreated
+          ? "4px solid #f59e0b"
+          : "4px solid #10b981"
       }}
     >
       <div className="wf-card-header">
         <DepartmentBadge department={workflow.department} />
-        {isCreated ? (
+        {isInProgress ? (
+          <span style={{ fontSize: "11px", fontWeight: 700, background: "#e0e7ff", color: "#4338ca", border: "1px solid #c7d2fe", padding: "2px 8px", borderRadius: "100px" }}>
+            ⚡ IN PROGRESS
+          </span>
+        ) : isCreated ? (
           <span style={{ fontSize: "11px", fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "2px 8px", borderRadius: "100px" }}>
             ⚡ CREATED
           </span>
