@@ -3,6 +3,7 @@ import { api } from "./api";
 import Dashboard from "./components/Dashboard";
 import CreateWorkflow from "./components/CreateWorkflow";
 import Conflicts from "./components/Conflicts";
+import Auth from "./pages/Auth";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
@@ -11,6 +12,7 @@ const TABS = [
 ];
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [workflows, setWorkflows] = useState([]);
   const [stats, setStats] = useState(null);
@@ -20,6 +22,7 @@ export default function App() {
   const [conflictError, setConflictError] = useState("");
   const [bootError, setBootError] = useState("");
   const [aiActive, setAiActive] = useState(false);
+  const [welcome, setWelcome] = useState("");
   const glowTimer = useRef(null);
 
   const triggerAiGlow = useCallback((durationMs = 3000) => {
@@ -32,6 +35,20 @@ export default function App() {
     triggerAiGlow(7000);
     return () => clearTimeout(glowTimer.current);
   }, [triggerAiGlow]);
+
+  const handleAuthSuccess = (user, mode) => {
+    setIsAuthenticated(true);
+    setWelcome(
+      mode === "signup"
+        ? "Account created. Welcome to FLOW."
+        : `Welcome back, ${user.name} 👋`,
+    );
+    setTimeout(() => setWelcome(""), 4000);
+  };
+
+  if (!isAuthenticated) {
+    return <Auth onSuccess={handleAuthSuccess} triggerAiGlow={triggerAiGlow} />;
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -79,6 +96,7 @@ export default function App() {
 
   return (
     <div className={aiActive ? "ai-glow-active app" : "app"}>
+      {welcome && <div className="welcome-toast">{welcome}</div>}
       <div className="topbar ai-header-pulse">
         <div className="brand">
           <div className="logo">F</div>
