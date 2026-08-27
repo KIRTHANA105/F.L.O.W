@@ -1,4 +1,4 @@
-"""Verify the two Claude-backed endpoints (build steps 2 and 7).
+"""Verify the two Gemini-backed endpoints (build steps 2 and 7).
 
 Run this once after putting your key in backend/.env, with the backend running:
     python verify_llm.py
@@ -85,7 +85,7 @@ def main():
         print(f"  Conflict: {conflict['rule_a']['name']}  VS  {conflict['rule_b']['name']}")
         print(f"  Overlap : {conflict['overlap_label']}\n")
         explanation = post("/api/explain-conflict", {"conflict": conflict})["explanation"]
-        print("  Claude's explanation:")
+        print("  Gemini's explanation:")
         for para in explanation.split("\n\n"):
             print(f"    {para.strip()}\n")
         if len(explanation) < 60:

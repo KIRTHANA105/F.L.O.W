@@ -122,7 +122,11 @@ function SimulationResults({ sim }) {
   );
 }
 
-export default function CreateWorkflow({ onDeployed, onNavigate }) {
+export default function CreateWorkflow({
+  onDeployed,
+  onNavigate,
+  triggerAiGlow,
+}) {
   const [text, setText] = useState(DEMO_RULE);
   const [source, setSource] = useState("ERPNext");
   const [parsed, setParsed] = useState(null);
@@ -144,6 +148,7 @@ export default function CreateWorkflow({ onDeployed, onNavigate }) {
   };
 
   const handleParse = async () => {
+    triggerAiGlow();
     setBusy("parse");
     setError("");
     setSim(null);
@@ -271,7 +276,9 @@ export default function CreateWorkflow({ onDeployed, onNavigate }) {
                 Parsing…
               </>
             ) : (
-              "Parse →"
+              <>
+                Parse → <span className="ai-badge">AI</span>
+              </>
             )}
           </button>
         </div>
@@ -283,7 +290,7 @@ export default function CreateWorkflow({ onDeployed, onNavigate }) {
             <div>
               <h2>Structured workflow</h2>
               <p className="sub" style={{ marginBottom: 0 }}>
-                Extracted by Claude from your sentence.
+                Extracted by Gemini from your sentence.
               </p>
             </div>
             <span className="step-hint">

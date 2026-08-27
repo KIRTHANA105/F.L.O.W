@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import Dashboard from "./components/Dashboard";
 import CreateWorkflow from "./components/CreateWorkflow";
@@ -19,6 +19,19 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [conflictError, setConflictError] = useState("");
   const [bootError, setBootError] = useState("");
+  const [aiActive, setAiActive] = useState(false);
+  const glowTimer = useRef(null);
+
+  const triggerAiGlow = useCallback((durationMs = 3000) => {
+    setAiActive(true);
+    clearTimeout(glowTimer.current);
+    glowTimer.current = setTimeout(() => setAiActive(false), durationMs);
+  }, []);
+
+  useEffect(() => {
+    triggerAiGlow(7000);
+    return () => clearTimeout(glowTimer.current);
+  }, [triggerAiGlow]);
 
   const refresh = useCallback(async () => {
     try {
@@ -49,6 +62,7 @@ export default function App() {
   };
 
   const handleScan = async () => {
+    triggerAiGlow();
     setScanning(true);
     setConflictError("");
     try {
@@ -64,8 +78,8 @@ export default function App() {
   const conflictCount = conflictResult?.conflicts_found || 0;
 
   return (
-    <div className="app">
-      <div className="topbar">
+    <div className={aiActive ? "ai-glow-active app" : "app"}>
+      <div className="topbar ai-header-pulse">
         <div className="brand">
           <div className="logo">F</div>
           <div>
@@ -103,7 +117,11 @@ export default function App() {
       )}
 
       {tab === "create" && (
-        <CreateWorkflow onDeployed={handleDeployed} onNavigate={setTab} />
+        <CreateWorkflow
+          onDeployed={handleDeployed}
+          onNavigate={setTab}
+          triggerAiGlow={triggerAiGlow}
+        />
       )}
 
       {tab === "conflicts" && (
@@ -112,6 +130,7 @@ export default function App() {
           onScan={handleScan}
           scanning={scanning}
           error={conflictError}
+          triggerAiGlow={triggerAiGlow}
         />
       )}
     </div>

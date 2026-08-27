@@ -2,7 +2,8 @@
 import json
 import os
 
-import anthropic
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +14,7 @@ import engine
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "gemini-2.5-flash"
 
 app = FastAPI(title="FLOW API", version="1.0.0")
 app.add_middleware(
@@ -39,17 +40,23 @@ _client = None
 CONFLICTS_BY_WORKFLOW = {}
 
 
-def claude():
-    """Lazily build the Anthropic client so the server boots without a key."""
+def gemini():
+    """Lazily build the Gemini client so the server boots without a key."""
     global _client
     if _client is None:
-        if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+        if not os.environ.get("GEMINI_API_KEY"):
             raise HTTPException(
                 status_code=503,
-                detail="ANTHROPIC_API_KEY is not set. Add it to backend/.env and restart.",
+                detail="GEMINI_API_KEY is not set. Add it to backend/.env and restart.",
             )
-        _client = anthropic.Anthropic()
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     return _client
+
+
+def gemini_error(exc):
+    if "API_KEY_INVALID" in str(exc) or "API key not valid" in str(exc):
+        return "GEMINI_API_KEY is invalid. Create a new key in Google AI Studio and update backend/.env."
+    return f"Gemini API error: {exc}"
 
 
 @app.on_event("startup")
@@ -123,8 +130,8 @@ PARSE_SCHEMA = {
                         "enum": [">", ">=", "<", "<=", "equals", "not_equals", "contains"],
                     },
                     "value": {
-                        "type": ["string", "number"],
-                        "description": "Plain value; hours as a number, money as a number.",
+                        "type": "string",
+                        "description": "Plain value; use numeric text for hours and money.",
                     },
                     "display": {
                         "type": "string",
@@ -132,7 +139,6 @@ PARSE_SCHEMA = {
                     },
                 },
                 "required": ["field", "operator", "value", "display"],
-                "additionalProperties": False,
             },
         },
         "actions": {
@@ -156,13 +162,11 @@ PARSE_SCHEMA = {
                     },
                 },
                 "required": ["type", "target", "display"],
-                "additionalProperties": False,
             },
         },
         "priority": {"type": "string", "enum": ["low", "medium", "high"]},
     },
     "required": ["name", "trigger", "trigger_type", "conditions", "actions", "priority"],
-    "additionalProperties": False,
 }
 
 PARSE_SYSTEM = """You convert plain-English business automation rules into structured JSON.
@@ -194,25 +198,26 @@ def parse_rule(req: ParseRequest):
         raise HTTPException(status_code=400, detail="Describe a rule first.")
 
     try:
-        response = claude().messages.create(
+        response = gemini().models.generate_content(
             model=MODEL,
-            max_tokens=2000,
-            system=PARSE_SYSTEM,
-            messages=[{"role": "user", "content": req.text.strip()}],
-            output_config={"format": {"type": "json_schema", "schema": PARSE_SCHEMA}},
+            contents=req.text.strip(),
+            config=types.GenerateContentConfig(
+                system_instruction=PARSE_SYSTEM,
+                max_output_tokens=2000,
+                response_mime_type="application/json",
+                response_schema=PARSE_SCHEMA,
+            ),
         )
     except HTTPException:
         raise
-    except anthropic.APIStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc.message}")
-    except anthropic.APIConnectionError:
-        raise HTTPException(status_code=502, detail="Could not reach the Claude API.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=gemini_error(exc))
 
     STATS["llm_calls"] += 1
 
-    text = next((b.text for b in response.content if b.type == "text"), None)
+    text = response.text
     if not text:
-        raise HTTPException(status_code=502, detail="Claude returned no parsable content.")
+        raise HTTPException(status_code=502, detail="Gemini returned no parsable content.")
 
     parsed = json.loads(text)
     parsed["source_system"] = req.source_system
@@ -337,24 +342,25 @@ Propose a fix. Respond ONLY with this JSON structure:
   }}
 }}"""
     try:
-        response = claude().messages.create(
+        response = gemini().models.generate_content(
             model=MODEL,
-            max_tokens=800,
-            system=RESOLVE_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=RESOLVE_SYSTEM,
+                max_output_tokens=800,
+                response_mime_type="application/json",
+            ),
         )
     except HTTPException:
         raise
-    except anthropic.APIStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc.message}")
-    except anthropic.APIConnectionError:
-        raise HTTPException(status_code=502, detail="Could not reach the Claude API.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=gemini_error(exc))
 
-    text = "".join(block.text for block in response.content if block.type == "text").strip()
+    text = response.text.strip()
     try:
         result = json.loads(text)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=502, detail="Claude returned invalid resolver JSON.")
+        raise HTTPException(status_code=502, detail="Gemini returned invalid resolver JSON.")
     STATS["llm_calls"] += 1
     return result
 
@@ -413,21 +419,21 @@ def explain_conflict(req: ExplainRequest):
     )
 
     try:
-        response = claude().messages.create(
+        response = gemini().models.generate_content(
             model=MODEL,
-            max_tokens=600,
-            system=EXPLAIN_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=EXPLAIN_SYSTEM,
+                max_output_tokens=600,
+            ),
         )
     except HTTPException:
         raise
-    except anthropic.APIStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Claude API error: {exc.message}")
-    except anthropic.APIConnectionError:
-        raise HTTPException(status_code=502, detail="Could not reach the Claude API.")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=gemini_error(exc))
 
     STATS["llm_calls"] += 1
     STATS["conflict_llm_calls"] += 1
 
-    explanation = "".join(b.text for b in response.content if b.type == "text").strip()
+    explanation = response.text.strip()
     return {"explanation": explanation, "llm_calls": STATS["llm_calls"]}

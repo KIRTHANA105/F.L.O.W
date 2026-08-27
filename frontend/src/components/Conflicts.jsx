@@ -26,7 +26,7 @@ function RuleSide({ rule, stance }) {
   );
 }
 
-function ConflictCard({ conflict }) {
+function ConflictCard({ conflict, triggerAiGlow }) {
   const [explanation, setExplanation] = useState("");
   const [busy, setBusy] = useState(false);
   const [suggestionBusy, setSuggestionBusy] = useState(false);
@@ -34,6 +34,7 @@ function ConflictCard({ conflict }) {
   const [error, setError] = useState("");
 
   const explain = async () => {
+    triggerAiGlow();
     setBusy(true);
     setError("");
     try {
@@ -47,6 +48,7 @@ function ConflictCard({ conflict }) {
   };
 
   const suggestFix = async () => {
+    triggerAiGlow();
     setSuggestionBusy(true);
     setError("");
     try {
@@ -111,7 +113,7 @@ function ConflictCard({ conflict }) {
           {busy ? (
             <>
               <Spinner />
-              Asking Claude…
+              Asking Gemini…
             </>
           ) : (
             "✦ Explain this conflict"
@@ -122,9 +124,13 @@ function ConflictCard({ conflict }) {
           onClick={suggestFix}
           disabled={busy || suggestionBusy}
         >
-          {suggestionBusy && !suggestion
-            ? "Analyzing conflict..."
-            : "Suggest Fix"}
+          {suggestionBusy && !suggestion ? (
+            "Analyzing conflict..."
+          ) : (
+            <>
+              <span>Suggest Fix</span> <span className="ai-badge">AI</span>
+            </>
+          )}
         </button>
         <span style={{ color: "var(--muted)", fontSize: 13 }}>
           Detection was pure Python — this button is the only LLM call.
@@ -139,7 +145,7 @@ function ConflictCard({ conflict }) {
 
       {explanation && (
         <div className="explanation">
-          <div className="who">✦ Claude's analysis</div>
+          <div className="who">✦ Gemini's analysis</div>
           {explanation.split(/\n\n+/).map((para, i) => (
             <p key={i}>{para}</p>
           ))}
@@ -176,7 +182,13 @@ function ConflictCard({ conflict }) {
   );
 }
 
-export default function Conflicts({ result, onScan, scanning, error }) {
+export default function Conflicts({
+  result,
+  onScan,
+  scanning,
+  error,
+  triggerAiGlow,
+}) {
   return (
     <div>
       <div className="card">
@@ -195,7 +207,9 @@ export default function Conflicts({ result, onScan, scanning, error }) {
                 Scanning…
               </>
             ) : (
-              "⟳ Scan for Conflicts"
+              <>
+                ⟳ Scan for Conflicts <span className="ai-badge">AI</span>
+              </>
             )}
           </button>
         </div>
@@ -232,7 +246,7 @@ export default function Conflicts({ result, onScan, scanning, error }) {
       </div>
 
       {result?.conflicts.map((c) => (
-        <ConflictCard key={c.id} conflict={c} />
+        <ConflictCard key={c.id} conflict={c} triggerAiGlow={triggerAiGlow} />
       ))}
     </div>
   );
