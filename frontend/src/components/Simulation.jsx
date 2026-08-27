@@ -17,6 +17,9 @@ export default function Simulation({
   initialWorkflowId = null,
   decisionPending = null,
   onReturnToDecision,
+  onActivate,
+  onRecalculate,
+  onNavigate,
   triggerAiGlow,
 }) {
   const [workflows, setWorkflows] = useState([]);
@@ -24,12 +27,22 @@ export default function Simulation({
   const [selectedDept, setSelectedDept] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [simulating, setSimulating] = useState(false);
+  const [autoFixing, setAutoFixing] = useState(false);
   const [simReport, setSimReport] = useState(null);
+  const [conflicts, setConflicts] = useState([]);
   const [activeScenarioIdx, setActiveScenarioIdx] = useState(0);
   const [replayStepIdx, setReplayStepIdx] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (selectedWfId) {
+      api.getWorkflowConflicts(selectedWfId)
+        .then((res) => setConflicts(res.conflicts || []))
+        .catch(() => setConflicts([]));
+    }
+  }, [selectedWfId]);
 
   const loadWorkflows = useCallback(async () => {
     try {
@@ -128,6 +141,9 @@ export default function Simulation({
     return matchesDept && matchesQuery;
   });
 
+  const failedCount = simReport ? (simReport.outcomes?.failed_or_terminated_early ?? simReport.failed_scenarios ?? 0) : 0;
+  const isFullyVerified = simReport && failedCount === 0;
+
   return (
     <div className="simulation-page">
       <div className="sim-hero">
@@ -138,37 +154,22 @@ export default function Simulation({
           <h1>Process Simulation Studio</h1>
           <p>
             Prove and stress-test your business processes against synthesized scenarios,
-            virtual clock time steps, and connector fault injection before deploying to production.
+            boundary data, and connector failure injections with zero production risk.
           </p>
-        </div>
-
-        <div className="sim-hero-stats">
-          <div className="hero-stat-card">
-            <span className="hero-stat-num">0</span>
-            <span className="hero-stat-label">LLM Quota Used</span>
-          </div>
-          <div className="hero-stat-card">
-            <span className="hero-stat-num">100%</span>
-            <span className="hero-stat-label">Deterministic Python</span>
-          </div>
-          <div className="hero-stat-card">
-            <span className="hero-stat-num">Instant</span>
-            <span className="hero-stat-label">Virtual Clock ms</span>
-          </div>
         </div>
       </div>
 
-      <ErrorNote message={error} />
+      {error && <ErrorNote message={error} />}
 
-      <div className="sim-studio-grid">
+      <div className="sim-layout">
         {/* Left Column: Workflow Selector */}
         <div className="sim-sidebar">
-          <div className="sim-sidebar-header">
-            <h3>Workflows</h3>
-            <span className="sim-wf-count">{filteredWorkflows.length}</span>
+          <div className="sim-sidebar-head">
+            <h3>Automations</h3>
+            <span className="sim-count-badge">{filteredWorkflows.length}</span>
           </div>
 
-          <div className="sim-search-bar">
+          <div className="sim-search-box">
             <input
               type="text"
               placeholder="Search workflows…"
@@ -177,11 +178,11 @@ export default function Simulation({
             />
           </div>
 
-          <div className="sim-dept-filter-pills">
+          <div className="dept-tabs">
             {DEPT_FILTER_OPTIONS.map((dept) => (
               <button
                 key={dept}
-                className={`sim-dept-btn ${selectedDept === dept ? "active" : ""}`}
+                className={`dept-tab ${selectedDept === dept ? "active" : ""}`}
                 onClick={() => setSelectedDept(dept)}
               >
                 {dept}
@@ -189,59 +190,70 @@ export default function Simulation({
             ))}
           </div>
 
-          <div className="sim-wf-list">
-            {loading ? (
-              <div className="sim-loading-wrap">
-                <Spinner /> Loading workflows…
+          <div className="sim-workflow-list">
+            {loading && !workflows.length ? (
+              <div className="sim-loading-box">
+                <Spinner />
               </div>
             ) : filteredWorkflows.length === 0 ? (
-              <div className="sim-empty-list">No workflows found.</div>
+              <div className="sim-empty-state">No matching workflows</div>
             ) : (
-              filteredWorkflows.map((wf) => (
-                <div
-                  key={wf.id}
-                  className={`sim-wf-card ${wf.id === selectedWfId ? "active" : ""}`}
-                  onClick={() => handleSelectWorkflow(wf.id)}
-                >
-                  <div className="sim-wf-top">
-                    <DepartmentBadge department={wf.department} />
-                    <span className="sim-step-badge">
-                      {wf.steps?.length || 0} steps
-                    </span>
+              filteredWorkflows.map((w) => {
+                const isSelected = w.id === selectedWfId;
+                const isProposed = w.status === "proposed" || w.is_proposed;
+                return (
+                  <div
+                    key={w.id}
+                    className={`sim-workflow-card ${isSelected ? "selected" : ""}`}
+                    onClick={() => handleSelectWorkflow(w.id)}
+                  >
+                    <div className="sim-wf-top">
+                      <strong className="sim-wf-name">{w.name}</strong>
+                      <DepartmentBadge department={w.department} />
+                    </div>
+                    <div className="sim-wf-meta">
+                      <span>{(w.steps || []).length} steps</span>
+                      {isProposed && (
+                        <span style={{ color: "#d97706", fontWeight: 700 }}>
+                          ⚡ Pending Gate
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="sim-wf-name">{wf.name}</div>
-                  <div className="sim-wf-desc">{wf.description}</div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Right Column: Interactive Simulation Console & Visual Trace */}
-        <div className="sim-main-stage">
+        {/* Right Column: Active Simulation Workspace */}
+        <div className="sim-workspace">
           {selectedWorkflow ? (
-            <div className="sim-active-workflow-panel">
-              <div className="sim-control-banner">
-                <div>
-                  <div className="sim-active-dept">
+            <>
+              {/* Header Box */}
+              <div className="sim-workspace-header">
+                <div className="sim-ws-info">
+                  <div className="sim-ws-title-row">
+                    <h2>{selectedWorkflow.name}</h2>
                     <DepartmentBadge department={selectedWorkflow.department} />
-                    <span className="sim-arch-indicator">
-                      ⚡ 1 Trigger · ⚙ {Math.max(0, (selectedWorkflow.steps?.length || 1) - 1)} Actions
-                    </span>
+                    {selectedWorkflow.status === "proposed" && (
+                      <span className="badge amber">Pending Activation Gate</span>
+                    )}
                   </div>
-                  <h2 className="sim-active-title">{selectedWorkflow.name}</h2>
-                  <p className="sim-active-desc">{selectedWorkflow.description}</p>
+                  <p className="sim-ws-desc">
+                    {selectedWorkflow.description || "Configured multi-step workflow automation."}
+                  </p>
                 </div>
 
-                <div className="sim-action-group">
+                <div className="sim-ws-actions">
                   <button
-                    className="btn primary sim-run-btn"
+                    className="btn primary"
                     onClick={() => handleRunSimulation()}
                     disabled={simulating}
                   >
                     {simulating ? (
                       <>
-                        <Spinner /> Running 5 Scenarios…
+                        <Spinner /> Running Scenarios…
                       </>
                     ) : (
                       <>
@@ -255,11 +267,12 @@ export default function Simulation({
               {/* Simulation Results Dashboard */}
               {simReport ? (
                 <div className="sim-results-space">
-                  {onReturnToDecision && (
+                  {/* 1. Conflict Warning Banner if conflicts detected */}
+                  {conflicts.length > 0 && (
                     <div
                       style={{
-                        background: simReport.failed_scenarios === 0 ? "#f0fdf4" : "#fffbeb",
-                        border: `1px solid ${simReport.failed_scenarios === 0 ? "#86efac" : "#fde68a"}`,
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
                         borderRadius: "8px",
                         padding: "14px 20px",
                         display: "flex",
@@ -271,25 +284,110 @@ export default function Simulation({
                       }}
                     >
                       <div>
-                        <strong style={{ color: simReport.failed_scenarios === 0 ? "#166534" : "#92400e", fontSize: "14px" }}>
-                          {simReport.failed_scenarios === 0
-                            ? `✓ Simulation Verified: ${simReport.scenarios_run} scenarios passed without error.`
-                            : `⚠ Simulation Completed: ${simReport.failed_scenarios} issues detected.`}
+                        <strong style={{ color: "#991b1b", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>⛔</span> Process Conflict Detected Against Live Automations ({conflicts.length})
                         </strong>
                         <div style={{ fontSize: "12px", color: "#64748b", marginTop: "3px" }}>
-                          {simReport.failed_scenarios === 0
-                            ? "Workflow behavior is verified. Click below to proceed to the live automation activation phase."
-                            : "Issues detected during simulation. Review trace steps or return to Decision Gate."}
+                          {conflicts[0]?.message || "This workflow has overlapping field or trigger collisions with existing automations."}
                         </div>
                       </div>
 
                       <button
-                        className="btn success btn-sm"
-                        onClick={() => onReturnToDecision(simReport)}
+                        className="btn danger btn-sm"
+                        onClick={() => onNavigate?.("conflicts", selectedWorkflow?.id)}
                         style={{ fontWeight: 700, padding: "8px 16px", fontSize: "13px" }}
                       >
-                        ✓ Return to Decision Gate & Proceed to Activation →
+                        ⛔ Inspect in Conflict Tab & View Strategy →
                       </button>
+                    </div>
+                  )}
+
+                  {/* 2. Simulation Outcome Banner */}
+                  <div
+                    style={{
+                      background: isFullyVerified ? "#f0fdf4" : "#fffbeb",
+                      border: `1px solid ${isFullyVerified ? "#86efac" : "#fde68a"}`,
+                      borderRadius: "8px",
+                      padding: "14px 20px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "12px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ color: isFullyVerified ? "#166534" : "#92400e", fontSize: "14px" }}>
+                        {isFullyVerified
+                          ? `✓ Simulation Verified: All ${simReport.scenarios_run} scenarios passed without error.`
+                          : `⚠ Simulation Completed: ${failedCount} issue${failedCount > 1 ? "s" : ""} detected.`}
+                      </strong>
+                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "3px" }}>
+                        {isFullyVerified
+                          ? "Workflow execution has been proven across boundary and fault injections. Ready for live execution."
+                          : "Edge case termination or unhandled exception observed. Review details or use AI Auto-Fix below."}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                      {isFullyVerified ? (
+                        <button
+                          className="btn success btn-sm"
+                          onClick={handleDirectActivate}
+                          style={{ fontWeight: 700, padding: "8px 18px", fontSize: "13px" }}
+                        >
+                          ✓ Move to Live Automation Execution Phase →
+                        </button>
+                      ) : (
+                        <button
+                          className="btn secondary btn-sm"
+                          onClick={handleAutoFix}
+                          disabled={autoFixing}
+                          style={{ fontWeight: 700, padding: "8px 16px", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}
+                        >
+                          {autoFixing ? <Spinner /> : "🔄 Auto-Fix & Optimize with AI"}
+                        </button>
+                      )}
+
+                      {onReturnToDecision && (
+                        <button
+                          className="btn ghost btn-sm"
+                          onClick={() => onReturnToDecision(simReport)}
+                          style={{ fontSize: "12px" }}
+                        >
+                          Return to Gate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. AI Remediation Insights Panel when issues detected */}
+                  {!isFullyVerified && (
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderLeft: "4px solid #f59e0b",
+                        borderRadius: "8px",
+                        padding: "16px 20px",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      <strong style={{ color: "#0f172a", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>💡</span> AI Optimization Insights & Remediation Strategy:
+                      </strong>
+                      <ul style={{ margin: "8px 0 0 0", paddingLeft: "20px", fontSize: "13px", color: "#475569", lineHeight: "1.6" }}>
+                        <li>
+                          <strong>Defensive Error Policy:</strong> Add retry policies (e.g. exponential backoff, max 3 attempts) on external API connectors to survive temporary 500/timeout network errors.
+                        </li>
+                        <li>
+                          <strong>Boundary Guardrails:</strong> Ensure condition branches include explicit fallback routes for empty or boundary inputs.
+                        </li>
+                        <li>
+                          <strong>One-Click Fix:</strong> Click <code>🔄 Auto-Fix & Optimize with AI</code> to automatically restructure these steps into the workflow schema.
+                        </li>
+                      </ul>
                     </div>
                   )}
 
@@ -500,7 +598,7 @@ export default function Simulation({
                   </p>
                 </div>
               )}
-            </div>
+            </>
           ) : (
             <div className="sim-empty-stage">
               <p>Select a workflow from the left sidebar to start simulation.</p>

@@ -461,7 +461,7 @@ export default function DecisionGate({
                   disabled={actionBusy}
                   style={{ padding: "9px 20px", fontSize: "14px", fontWeight: 600 }}
                 >
-                  {actionBusy ? <Spinner /> : "✓ Activate Workflow"}
+                  {actionBusy ? <Spinner /> : "✓ Put in Live Execution Phase"}
                 </button>
                 <button
                   className="btn secondary btn-sm"
@@ -479,7 +479,7 @@ export default function DecisionGate({
                   disabled={actionBusy}
                   style={{ padding: "9px 20px", fontSize: "14px", fontWeight: 600 }}
                 >
-                  ⚡ Run Simulation
+                  ⚡ Proceed to Simulation Phase
                 </button>
                 <button
                   type="button"

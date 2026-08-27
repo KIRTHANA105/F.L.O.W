@@ -85,26 +85,57 @@ def generate_action_output(operation_id: str, fake: Faker) -> Dict[str, Any]:
 
 
 def resolve_json_path(path_expr: str, scope: Dict[str, Any]) -> Any:
-    """Resolve JSON path expressions like '$.company.employees' or '$.deal.amount' against scope."""
-    if not isinstance(path_expr, str) or not path_expr.startswith("$."):
+    """Resolve JSON path expressions like '$.company.employees' or 'contact.employees' against scope."""
+    if not isinstance(path_expr, str):
         return path_expr
     
-    parts = path_expr[2:].split(".")
+    clean_path = path_expr[2:] if path_expr.startswith("$.") else path_expr
+    parts = clean_path.split(".")
+    
+    # 1. Exact path traversal from root
     curr = scope
+    found = True
     for part in parts:
         if isinstance(curr, dict) and part in curr:
             curr = curr[part]
         else:
-            return None
-    return curr
+            found = False
+            break
+    if found and curr is not None:
+        return curr
+
+    # 2. Check if the leaf key exists directly in root scope
+    leaf_key = parts[-1]
+    if leaf_key in scope and scope[leaf_key] is not None:
+        return scope[leaf_key]
+
+    # 3. Check inside any nested dictionaries (e.g. scope['trigger'], scope['company'], scope['contact'])
+    for k, v in scope.items():
+        if isinstance(v, dict):
+            # Check full remaining subpath or leaf
+            sub = v
+            sub_found = True
+            for part in parts:
+                if isinstance(sub, dict) and part in sub:
+                    sub = sub[part]
+                else:
+                    sub_found = False
+                    break
+            if sub_found and sub is not None:
+                return sub
+            if leaf_key in v and v[leaf_key] is not None:
+                return v[leaf_key]
+
+    return None
 
 
 def resolve_inputs(inputs: Dict[str, Any], scope: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve all input values against variable scope."""
     resolved = {}
     for k, v in inputs.items():
-        if isinstance(v, str) and v.startswith("$."):
-            resolved[k] = resolve_json_path(v, scope)
+        if isinstance(v, str) and (v.startswith("$.") or "." in v):
+            res = resolve_json_path(v, scope)
+            resolved[k] = res if res is not None else v
         elif isinstance(v, dict):
             resolved[k] = resolve_inputs(v, scope)
         else:
@@ -123,14 +154,14 @@ def evaluate_condition(cond_str: str, scope: Dict[str, Any]) -> bool:
     m = re.match(r"(?:is_empty|empty)\((.+?)\)", c, re.IGNORECASE)
     if m:
         field = m.group(1).strip()
-        val = resolve_json_path(field if field.startswith("$.") else f"$.{field}", scope)
+        val = resolve_json_path(field, scope)
         return val is None or val == "" or val == [] or val == {}
 
     # Check "in [a, b, c]"
     m = re.match(r"(.+?)\s+in\s+\[(.*?)\]", c, re.IGNORECASE)
     if m:
         field = m.group(1).strip()
-        val = resolve_json_path(field if field.startswith("$.") else f"$.{field}", scope)
+        val = resolve_json_path(field, scope)
         candidates = [item.strip().strip("'\"") for item in m.group(2).split(",") if item.strip()]
         return str(val) in candidates
 
@@ -141,29 +172,23 @@ def evaluate_condition(cond_str: str, scope: Dict[str, Any]) -> bool:
         op = m.group(2)
         right_expr = m.group(3).strip().strip("'\"")
         
-        left_val = resolve_json_path(left_expr if left_expr.startswith("$.") else f"$.{left_expr}", scope)
-        if left_val is None:
-            # Fallback search anywhere in scope
-            for k, v in scope.items():
-                if isinstance(v, dict) and left_expr in v:
-                    left_val = v[left_expr]
-                    break
+        left_val = resolve_json_path(left_expr, scope)
         
         # Try numeric comparison
         try:
             l_num = float(left_val) if left_val is not None else 0.0
             r_num = float(right_expr.replace(",", ""))
-            if op in (">",):
+            if op == ">":
                 return l_num > r_num
-            elif op in (">=",):
+            elif op == ">=":
                 return l_num >= r_num
-            elif op in ("<",):
+            elif op == "<":
                 return l_num < r_num
-            elif op in ("<=",):
+            elif op == "<=":
                 return l_num <= r_num
             elif op in ("==", "="):
                 return l_num == r_num
-            elif op in ("!=",):
+            elif op == "!=":
                 return l_num != r_num
         except (ValueError, TypeError):
             # Fallback string comparison
@@ -178,8 +203,8 @@ def evaluate_condition(cond_str: str, scope: Dict[str, Any]) -> bool:
             elif op == "<":
                 return l_str < r_str
     
-    # Default truthy evaluation on resolved field if simple variable name
-    val = resolve_json_path(c if c.startswith("$.") else f"$.{c}", scope)
+    # Default truthy evaluation on resolved field
+    val = resolve_json_path(c, scope)
     return bool(val)
 
 
@@ -452,8 +477,11 @@ def run_simulation(workflow: Dict[str, Any], max_scenarios: Optional[int] = None
 
     condition_scenarios = extract_condition_scenarios(workflow)
     
-    # Failure scenarios for action steps
-    action_steps = [s for s in steps if s.get("type", "action") != "condition"]
+    # Failure scenarios for downstream action steps (excluding triggers & conditions)
+    action_steps = [
+        s for idx, s in enumerate(steps)
+        if s.get("type", "action") not in ("condition", "trigger") and idx > 0
+    ]
     failure_scenarios = []
     for s in action_steps:
         sid = str(s.get("id") or s.get("name"))
@@ -554,9 +582,11 @@ def run_simulation(workflow: Dict[str, Any], max_scenarios: Optional[int] = None
         "workflow_id": workflow_id,
         "workflow_name": workflow.get("name", "Workflow"),
         "scenarios_run": len(scenario_reports),
+        "failed_scenarios": failure_count,
         "outcomes": {
             "success": success_count,
             "failed_or_terminated_early": failure_count,
+            "failed_scenarios": failure_count,
             "success_rate_percent": round((success_count / len(scenario_reports) * 100), 1) if scenario_reports else 0,
         },
         "terminated_early": terminated_early_scenarios,

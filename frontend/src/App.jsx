@@ -205,6 +205,12 @@ export default function App() {
           initialWorkflowId={simWorkflowId}
           decisionPending={pendingDecision}
           onReturnToDecision={decisionActive ? handleReturnToDecision : null}
+          onActivate={handleAdopt}
+          onRecalculate={handleWorkflowResult}
+          onNavigate={(newTab, wfId) => {
+            if (wfId) setSimWorkflowId(wfId);
+            setTab(newTab);
+          }}
           triggerAiGlow={triggerAiGlow}
         />
       )}

@@ -469,6 +469,20 @@ function SystemConflictsView({ onDashboard, onNavigate, triggerAiGlow }) {
                     )}
                   </div>
                 )}
+
+                {/* Automated Resolution Strategy */}
+                <div style={{ marginTop: "10px", padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px" }}>
+                  <strong style={{ color: "#166534", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>💡</span> Automated Resolution Strategy:
+                  </strong>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#15803d", lineHeight: "1.4" }}>
+                    {c.type === "direct_overwrite"
+                      ? `Namespace & Field Isolation: Configure this workflow to write to scoped sub-keys (e.g. 'contact.custom_fields') instead of colliding path '${c.evidence?.field_paths?.[0] || "properties"}', or add conditional guardrails.`
+                      : c.type === "trigger_loop"
+                      ? `Decouple Trigger Cycles: Insert an idempotency filter or change-detection condition to terminate the recursive event cascade between ${c.evidence?.cycle_path?.join(" → ") || "connectors"}.`
+                      : `Apply defensive validation rules to eliminate mutual exclusivity across concurrent automations.`}
+                  </p>
+                </div>
               </div>
             );
           })}
