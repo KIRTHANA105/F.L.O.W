@@ -53,36 +53,18 @@ export default function Simulation({
         wfs = [decisionPending.proposal, ...wfs];
       }
       setWorkflows(wfs);
-      const targetId = initialWorkflowId || selectedWfId || (wfs[0]?.id ?? null);
-      if (targetId) {
-        setSelectedWfId(targetId);
-      }
+      setSelectedWfId((prev) => initialWorkflowId || prev || (wfs[0]?.id ?? null));
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load workflows");
     } finally {
       setLoading(false);
     }
-  }, [selectedWfId, initialWorkflowId, decisionPending]);
+  }, [initialWorkflowId, decisionPending]);
 
   useEffect(() => {
     loadWorkflows();
   }, [loadWorkflows]);
-
-  // Auto-run simulation when initialWorkflowId is set
-  const autoRunRef = useRef(false);
-  useEffect(() => {
-    if (initialWorkflowId && !autoRunRef.current) {
-      autoRunRef.current = true;
-      handleRunSimulation(initialWorkflowId);
-    }
-  }, [initialWorkflowId]);
-
-  const selectedWorkflow =
-    workflows.find((w) => w.id === selectedWfId) ||
-    (decisionPending?.proposal?.id === selectedWfId ? decisionPending.proposal : null) ||
-    workflows[0] ||
-    null;
 
   const handleRunSimulation = async (wfId) => {
     const idToRun = wfId || selectedWfId;
@@ -100,6 +82,65 @@ export default function Simulation({
       setError(e.message || "Simulation run failed");
     } finally {
       setSimulating(false);
+    }
+  };
+
+  // Auto-run simulation when initialWorkflowId is set
+  const autoRunRef = useRef(false);
+  useEffect(() => {
+    if (initialWorkflowId && !autoRunRef.current) {
+      autoRunRef.current = true;
+      handleRunSimulation(initialWorkflowId);
+    }
+  }, [initialWorkflowId]);
+
+  const selectedWorkflow =
+    workflows.find((w) => w.id === selectedWfId) ||
+    (decisionPending?.proposal?.id === selectedWfId ? decisionPending.proposal : null) ||
+    workflows[0] ||
+    null;
+
+  const handleDirectActivate = async () => {
+    if (!selectedWorkflow) return;
+    triggerAiGlow?.();
+    try {
+      if (onActivate) {
+        await onActivate(selectedWorkflow);
+      } else {
+        await api.adoptWorkflow(selectedWorkflow.id);
+        await loadWorkflows();
+        onNavigate?.("dashboard");
+      }
+    } catch (e) {
+      setError(e.message || "Failed to activate workflow");
+    }
+  };
+
+  const handleAutoFix = async () => {
+    if (!selectedWorkflow) return;
+    triggerAiGlow?.();
+    setAutoFixing(true);
+    setError("");
+    try {
+      const fixPrompt = `Optimize and harden workflow '${selectedWorkflow.name}': ${selectedWorkflow.description || ""}. Fix any unhandled edge cases, add retry policies for API action steps, and ensure fallback conditions.`;
+      const analyzeRes = await api.analyze(fixPrompt);
+      const newProposal = analyzeRes.proposal;
+      const evalRes = await api.evaluate(newProposal.id);
+
+      if (typeof onRecalculate === "function") {
+        onRecalculate({
+          proposal: newProposal,
+          evaluation: evalRes,
+          rawText: fixPrompt,
+        });
+      }
+      setSelectedWfId(newProposal.id);
+      await loadWorkflows();
+      await handleRunSimulation(newProposal.id);
+    } catch (e) {
+      setError(e.message || "Failed to auto-fix workflow with AI");
+    } finally {
+      setAutoFixing(false);
     }
   };
 
@@ -567,12 +608,19 @@ export default function Simulation({
                                     <span className="trace-op-tag">{step.operation_id}</span>
                                   </div>
 
-                                  <div className="trace-status-pill success">
-                                    ✓ {step.status?.toUpperCase() || "OK"}
+                                  <div className={`trace-status-pill ${step.status === "error" ? "error" : "success"}`}>
+                                    {step.status === "error" ? "✕ ERROR" : `✓ ${step.status?.toUpperCase() || "OK"}`}
                                   </div>
                                 </div>
 
-                                {step.output && (
+                                {step.output?.error ? (
+                                  <div className="trace-payload-block" style={{ borderLeft: "3px solid #ef4444", paddingLeft: "8px", marginTop: "6px" }}>
+                                    <span className="payload-label" style={{ color: "#ef4444" }}>Simulated Exception / Error:</span>
+                                    <pre className="payload-json" style={{ color: "#b91c1c", background: "#fef2f2", borderColor: "#fecaca" }}>
+                                      {step.output.error}
+                                    </pre>
+                                  </div>
+                                ) : step.output && (
                                   <div className="trace-payload-block">
                                     <span className="payload-label">Connector Output State:</span>
                                     <pre className="payload-json">
