@@ -1,0 +1,10 @@
+[
+  { "invoice_id": "INV-2001", "status": "submitted", "hours_since_update": 5,  "amount": 18000, "vendor": "Chola Packaging",   "warehouse": "CHN-01" },
+  { "invoice_id": "INV-2002", "status": "submitted", "hours_since_update": 14, "amount": 34500, "vendor": "Vel Logistics",     "warehouse": "BLR-02" },
+  { "invoice_id": "INV-2003", "status": "submitted", "hours_since_update": 2,  "amount": 47800, "vendor": "Sree Raw Materials","warehouse": "HYD-03" },
+  { "invoice_id": "INV-2004", "status": "submitted", "hours_since_update": 40, "amount": 62000, "vendor": "Aadhi Machinery",   "warehouse": "CHN-01" },
+  { "invoice_id": "INV-2005", "status": "draft",     "hours_since_update": 9,  "amount": 21000, "vendor": "Tamil Print House", "warehouse": "BLR-02" },
+  { "invoice_id": "INV-2006", "status": "submitted", "hours_since_update": 26, "amount": 8900,  "vendor": "Nila Couriers",     "warehouse": "HYD-03" },
+  { "invoice_id": "INV-2007", "status": "submitted", "hours_since_update": 3,  "amount": 41200, "vendor": "Murugan Steel",     "warehouse": "CHN-01" },
+  { "invoice_id": "INV-2008", "status": "approved",  "hours_since_update": 60, "amount": 15000, "vendor": "Kavery Chemicals",  "warehouse": "BLR-02" }
+]

@@ -1,0 +1,17 @@
+[
+  { "order_id": "ORD-1001", "status": "packed",    "hours_since_update": 72,  "amount": 12500, "customer": "Aravind Traders",    "warehouse": "CHN-01" },
+  { "order_id": "ORD-1002", "status": "packed",    "hours_since_update": 61,  "amount": 8400,  "customer": "Meenakshi Stores",   "warehouse": "CHN-01" },
+  { "order_id": "ORD-1003", "status": "shipped",   "hours_since_update": 96,  "amount": 45000, "customer": "Ganesh Exports",     "warehouse": "BLR-02" },
+  { "order_id": "ORD-1004", "status": "packed",    "hours_since_update": 12,  "amount": 3200,  "customer": "Lakshmi Retail",     "warehouse": "CHN-01" },
+  { "order_id": "ORD-1005", "status": "packed",    "hours_since_update": 130, "amount": 67000, "customer": "Kumar Wholesale",    "warehouse": "HYD-03" },
+  { "order_id": "ORD-1006", "status": "delivered", "hours_since_update": 200, "amount": 15800, "customer": "Priya Enterprises",  "warehouse": "BLR-02" },
+  { "order_id": "ORD-1007", "status": "packed",    "hours_since_update": 47,  "amount": 22000, "customer": "Senthil & Co",       "warehouse": "CHN-01" },
+  { "order_id": "ORD-1008", "status": "pending",   "hours_since_update": 88,  "amount": 5100,  "customer": "Bala Distributors",  "warehouse": "HYD-03" },
+  { "order_id": "ORD-1009", "status": "packed",    "hours_since_update": 51,  "amount": 39000, "customer": "Vetri Logistics",    "warehouse": "BLR-02" },
+  { "order_id": "ORD-1010", "status": "cancelled", "hours_since_update": 310, "amount": 7600,  "customer": "Anand Mart",         "warehouse": "CHN-01" },
+  { "order_id": "ORD-1011", "status": "packed",    "hours_since_update": 6,   "amount": 18900, "customer": "Divya Supplies",     "warehouse": "HYD-03" },
+  { "order_id": "ORD-1012", "status": "shipped",   "hours_since_update": 30,  "amount": 52000, "customer": "Rajan Industries",   "warehouse": "BLR-02" },
+  { "order_id": "ORD-1013", "status": "packed",    "hours_since_update": 24,  "amount": 9800,  "customer": "Sundar Textiles",    "warehouse": "CHN-01" },
+  { "order_id": "ORD-1014", "status": "processing","hours_since_update": 55,  "amount": 31000, "customer": "Nithya Foods",       "warehouse": "HYD-03" },
+  { "order_id": "ORD-1015", "status": "packed",    "hours_since_update": 19,  "amount": 4300,  "customer": "Karthik Hardware",   "warehouse": "BLR-02" }
+]

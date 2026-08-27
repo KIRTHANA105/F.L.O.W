@@ -1,0 +1,323 @@
+"""FLOW - AI-Powered Business Automation Copilot (backend)."""
+import json
+import os
+
+import anthropic
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+import db
+import engine
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+MODEL = "claude-sonnet-4-6"
+
+app = FastAPI(title="FLOW API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # local dev only
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Beat 5: session counters. LLM work and pure-Python work tracked separately
+# so the cost story is visible on the dashboard.
+STATS = {
+    "llm_calls": 0,
+    "rules_evaluated": 0,
+    "simulations_run": 0,
+    "conflict_scans": 0,
+    "pairs_compared": 0,
+    "conflict_llm_calls": 0,
+}
+
+_client = None
+
+
+def claude():
+    """Lazily build the Anthropic client so the server boots without a key."""
+    global _client
+    if _client is None:
+        if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+            raise HTTPException(
+                status_code=503,
+                detail="ANTHROPIC_API_KEY is not set. Add it to backend/.env and restart.",
+            )
+        _client = anthropic.Anthropic()
+    return _client
+
+
+@app.on_event("startup")
+def startup():
+    seeded = db.init_db()
+    print(f"[FLOW] database ready at {db.DB_PATH} (seeded {seeded} workflows)")
+
+
+# --- Schemas ---------------------------------------------------------------
+class ParseRequest(BaseModel):
+    text: str
+    source_system: str = "Internal"
+
+
+class SimulateRequest(BaseModel):
+    workflow: dict
+
+
+class WorkflowRequest(BaseModel):
+    workflow: dict
+
+
+class ExplainRequest(BaseModel):
+    conflict: dict
+
+
+TRIGGER_TYPES = [
+    "order_status_change",
+    "order_created",
+    "invoice_submitted",
+    "shipment_created",
+    "payment_received",
+    "other",
+]
+
+PARSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Short human-readable rule name, max 6 words.",
+        },
+        "trigger": {
+            "type": "string",
+            "description": "The business event, title case. e.g. 'Order status change'.",
+        },
+        "trigger_type": {"type": "string", "enum": TRIGGER_TYPES},
+        "conditions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field": {
+                        "type": "string",
+                        "description": (
+                            "One of: status, hours_since_update, amount, warehouse, "
+                            "customer, vendor."
+                        ),
+                    },
+                    "operator": {
+                        "type": "string",
+                        "enum": [">", ">=", "<", "<=", "equals", "not_equals", "contains"],
+                    },
+                    "value": {
+                        "type": ["string", "number"],
+                        "description": "Plain value; hours as a number, money as a number.",
+                    },
+                    "display": {
+                        "type": "string",
+                        "description": "Readable phrasing, e.g. 'packed for more than 48 hours'.",
+                    },
+                },
+                "required": ["field", "operator", "value", "display"],
+                "additionalProperties": False,
+            },
+        },
+        "actions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": (
+                            "Verb: notify, alert, flag, approve, block, hold, escalate, reject."
+                        ),
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Who/what it acts on, e.g. 'warehouse', 'dashboard'.",
+                    },
+                    "display": {
+                        "type": "string",
+                        "description": "Readable phrasing, e.g. 'Alert the warehouse team'.",
+                    },
+                },
+                "required": ["type", "target", "display"],
+                "additionalProperties": False,
+            },
+        },
+        "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+    },
+    "required": ["name", "trigger", "trigger_type", "conditions", "actions", "priority"],
+    "additionalProperties": False,
+}
+
+PARSE_SYSTEM = """You convert plain-English business automation rules into structured JSON.
+
+Rules:
+- Split compound actions into separate action entries (e.g. "alert warehouse and flag on
+  dashboard" becomes two actions).
+- Use hours_since_update (a number of hours) for any "stays in X for N hours/days" phrasing;
+  convert days to hours.
+- Use amount for money. Strip currency symbols and separators.
+- "display" fields are shown directly to a business user, so keep them short and readable.
+- Choose the trigger_type enum value that best matches the described event."""
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "model": MODEL, "workflows": len(db.list_workflows())}
+
+
+@app.get("/api/stats")
+def get_stats():
+    return STATS
+
+
+# --- Beat 1: parse ---------------------------------------------------------
+@app.post("/api/parse")
+def parse_rule(req: ParseRequest):
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Describe a rule first.")
+
+    try:
+        response = claude().messages.create(
+            model=MODEL,
+            max_tokens=2000,
+            system=PARSE_SYSTEM,
+            messages=[{"role": "user", "content": req.text.strip()}],
+            output_config={"format": {"type": "json_schema", "schema": PARSE_SCHEMA}},
+        )
+    except HTTPException:
+        raise
+    except anthropic.APIStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc.message}")
+    except anthropic.APIConnectionError:
+        raise HTTPException(status_code=502, detail="Could not reach the Claude API.")
+
+    STATS["llm_calls"] += 1
+
+    text = next((b.text for b in response.content if b.type == "text"), None)
+    if not text:
+        raise HTTPException(status_code=502, detail="Claude returned no parsable content.")
+
+    parsed = json.loads(text)
+    parsed["source_system"] = req.source_system
+    parsed["raw_text"] = req.text.strip()
+    parsed["status"] = "draft"
+    return {"workflow": parsed, "llm_calls": STATS["llm_calls"]}
+
+
+# --- Beat 2: simulate (pure Python) ----------------------------------------
+@app.post("/api/simulate")
+def simulate_rule(req: SimulateRequest):
+    result = engine.simulate(req.workflow)
+    STATS["rules_evaluated"] += result["evaluations"]
+    STATS["simulations_run"] += 1
+    result["llm_calls_used"] = 0  # simulation is pure Python
+    return result
+
+
+# --- Beat 3: persist -------------------------------------------------------
+@app.get("/api/workflows")
+def get_workflows():
+    return {"workflows": db.list_workflows()}
+
+
+@app.post("/api/workflows")
+def create_workflow(req: WorkflowRequest):
+    wf = dict(req.workflow)
+    wf["status"] = "active"
+    if not wf.get("trigger"):
+        raise HTTPException(status_code=400, detail="Parse a rule before deploying it.")
+    return {"workflow": db.insert_workflow(wf)}
+
+
+@app.delete("/api/workflows/{workflow_id}")
+def remove_workflow(workflow_id: int):
+    if not db.delete_workflow(workflow_id):
+        raise HTTPException(status_code=404, detail="No such workflow.")
+    return {"deleted": workflow_id}
+
+
+@app.post("/api/reset")
+def reset_demo():
+    """Re-seed the DB so the demo can be run again from a clean slate."""
+    seeded = db.init_db(force_reseed=True)
+    for key in STATS:
+        STATS[key] = 0
+    return {"reseeded": seeded, "workflows": db.list_workflows()}
+
+
+# --- Beat 4: conflicts (pure Python) ---------------------------------------
+@app.post("/api/conflicts")
+def scan_conflicts():
+    result = engine.detect_conflicts(db.list_workflows())
+    for conflict in result["conflicts"]:
+        conflict["affected"] = engine.count_affected(conflict)
+    STATS["conflict_scans"] += 1
+    STATS["pairs_compared"] += result["pairs_compared"]
+    result["llm_calls_used"] = 0  # detection is pure Python
+    return result
+
+
+EXPLAIN_SYSTEM = """You explain automation rule conflicts to a business operations manager.
+
+Write exactly two short paragraphs, no headings, no markdown, no bullet points:
+1. What the conflict is and what actually happens to records caught in the overlap.
+2. A concrete recommended resolution naming which rule to change and how.
+
+Be specific about the numbers involved. Stay under 90 words total."""
+
+
+@app.post("/api/explain-conflict")
+def explain_conflict(req: ExplainRequest):
+    c = req.conflict
+    a, b = c.get("rule_a", {}), c.get("rule_b", {})
+
+    def describe(rule):
+        conds = "; ".join(x.get("display", "") for x in rule.get("conditions", []))
+        acts = "; ".join(x.get("display", "") for x in rule.get("actions", []))
+        return (
+            f"Rule \"{rule.get('name')}\" (source: {rule.get('source_system')}, "
+            f"priority: {rule.get('priority')})\n"
+            f"  Trigger: {rule.get('trigger')}\n"
+            f"  Conditions: {conds}\n"
+            f"  Actions: {acts}"
+        )
+
+    affected = c.get("affected") or {}
+    affected_line = ""
+    if affected.get("count"):
+        affected_line = (
+            f"\nRight now {affected['count']} live record(s) fall in this overlap: "
+            f"{', '.join(str(i) for i in affected.get('ids', []))}."
+        )
+
+    prompt = (
+        f"{describe(a)}\n\n{describe(b)}\n\n"
+        f"Detected overlap: {c.get('overlap_label')}.{affected_line}"
+    )
+
+    try:
+        response = claude().messages.create(
+            model=MODEL,
+            max_tokens=600,
+            system=EXPLAIN_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except HTTPException:
+        raise
+    except anthropic.APIStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc.message}")
+    except anthropic.APIConnectionError:
+        raise HTTPException(status_code=502, detail="Could not reach the Claude API.")
+
+    STATS["llm_calls"] += 1
+    STATS["conflict_llm_calls"] += 1
+
+    explanation = "".join(b.text for b in response.content if b.type == "text").strip()
+    return {"explanation": explanation, "llm_calls": STATS["llm_calls"]}

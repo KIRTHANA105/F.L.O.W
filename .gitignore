@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+backend/.env
+backend/flow.db
+node_modules/
+frontend/dist/
