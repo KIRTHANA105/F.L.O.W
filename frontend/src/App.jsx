@@ -39,7 +39,6 @@ export default function App() {
     await refresh();
     setJustDeployed(wf.name);
     setConflictResult(null); // stale once the rule set changes
-    setTab("dashboard");
     setTimeout(() => setJustDeployed(""), 8000);
   };
 
@@ -103,7 +102,9 @@ export default function App() {
         />
       )}
 
-      {tab === "create" && <CreateWorkflow onDeployed={handleDeployed} />}
+      {tab === "create" && (
+        <CreateWorkflow onDeployed={handleDeployed} onNavigate={setTab} />
+      )}
 
       {tab === "conflicts" && (
         <Conflicts

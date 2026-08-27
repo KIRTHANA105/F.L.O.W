@@ -42,6 +42,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ conflict }),
     }),
+  resolveConflict: (rule_a, rule_b) =>
+    request("/api/resolve-conflict", {
+      method: "POST",
+      body: JSON.stringify({ rule_a, rule_b }),
+    }),
+  applyFix: (fix) =>
+    request("/api/apply-fix", {
+      method: "POST",
+      body: JSON.stringify({ fix }),
+    }),
   stats: () => request("/api/stats"),
+  healthScore: () => request("/api/health-score"),
   reset: () => request("/api/reset", { method: "POST" }),
 };

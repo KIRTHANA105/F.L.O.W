@@ -277,3 +277,18 @@ def count_affected(conflict):
         if isinstance(val, (int, float)) and lo < val < hi:
             ids.append(rec.get(id_key))
     return {"dataset": dataset, "count": len(ids), "ids": ids}
+
+
+def calculate_health_score(workflows, conflicts):
+    """Calculate a 0-100 health score from active conflicts and orphan rules."""
+    active = [w for w in workflows if w.get("status", "active") == "active"]
+    conflict_count = len(conflicts.get("conflicts", [])) if isinstance(conflicts, dict) else len(conflicts)
+    conflict_penalty = conflict_count * 15
+    orphan_penalty = sum(5 for workflow in active if workflow.get("last_match_count", 0) == 0)
+    score = max(0, min(100, 100 - conflict_penalty - orphan_penalty))
+    return {
+        "score": int(score),
+        "conflict_penalty": conflict_penalty,
+        "orphan_penalty": orphan_penalty,
+        "conflict_count": conflict_count,
+    }

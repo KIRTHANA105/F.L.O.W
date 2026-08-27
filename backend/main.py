@@ -36,6 +36,7 @@ STATS = {
 }
 
 _client = None
+CONFLICTS_BY_WORKFLOW = {}
 
 
 def claude():
@@ -73,6 +74,15 @@ class WorkflowRequest(BaseModel):
 
 class ExplainRequest(BaseModel):
     conflict: dict
+
+
+class ResolveRequest(BaseModel):
+    rule_a: dict
+    rule_b: dict
+
+
+class ApplyFixRequest(BaseModel):
+    fix: dict
 
 
 TRIGGER_TYPES = [
@@ -215,10 +225,20 @@ def parse_rule(req: ParseRequest):
 @app.post("/api/simulate")
 def simulate_rule(req: SimulateRequest):
     result = engine.simulate(req.workflow)
+    workflow_id = req.workflow.get("id")
+    if workflow_id is not None:
+        db.update_last_match_count(workflow_id, result["matched"])
     STATS["rules_evaluated"] += result["evaluations"]
     STATS["simulations_run"] += 1
     result["llm_calls_used"] = 0  # simulation is pure Python
     return result
+
+
+@app.get("/api/health-score")
+def health_score():
+    workflows = [w for w in db.list_workflows() if w.get("status", "active") == "active"]
+    conflicts = engine.detect_conflicts(workflows)
+    return engine.calculate_health_score(workflows, conflicts)
 
 
 # --- Beat 3: persist -------------------------------------------------------
@@ -233,13 +253,28 @@ def create_workflow(req: WorkflowRequest):
     wf["status"] = "active"
     if not wf.get("trigger"):
         raise HTTPException(status_code=400, detail="Parse a rule before deploying it.")
-    return {"workflow": db.insert_workflow(wf)}
+    saved = db.insert_workflow(wf)
+    all_workflows = db.list_workflows()
+    conflict_result = engine.detect_conflicts(all_workflows)
+    workflow_id = saved["id"]
+    conflicts = [
+        conflict for conflict in conflict_result["conflicts"]
+        if conflict["rule_a"].get("id") == workflow_id
+        or conflict["rule_b"].get("id") == workflow_id
+    ]
+    CONFLICTS_BY_WORKFLOW[workflow_id] = conflicts
+    return {
+        "workflow": saved,
+        "conflicts_detected": len(conflicts),
+        "conflicts": conflicts,
+    }
 
 
 @app.delete("/api/workflows/{workflow_id}")
 def remove_workflow(workflow_id: int):
     if not db.delete_workflow(workflow_id):
         raise HTTPException(status_code=404, detail="No such workflow.")
+    CONFLICTS_BY_WORKFLOW.pop(workflow_id, None)
     return {"deleted": workflow_id}
 
 
@@ -249,6 +284,7 @@ def reset_demo():
     seeded = db.init_db(force_reseed=True)
     for key in STATS:
         STATS[key] = 0
+    CONFLICTS_BY_WORKFLOW.clear()
     return {"reseeded": seeded, "workflows": db.list_workflows()}
 
 
@@ -262,6 +298,80 @@ def scan_conflicts():
     STATS["pairs_compared"] += result["pairs_compared"]
     result["llm_calls_used"] = 0  # detection is pure Python
     return result
+
+
+RESOLVE_SYSTEM = """You are a business rules conflict resolver. You receive two conflicting
+automation rules and must propose a precise fix. Always respond in valid
+JSON only — no explanation, no markdown."""
+
+
+@app.post("/api/resolve-conflict")
+def resolve_conflict(req: ResolveRequest):
+    a, b = req.rule_a, req.rule_b
+    prompt = f"""These two rules conflict in the range where their conditions overlap.
+
+Rule A (id: {a.get('id')}):
+- Name: {a.get('name')}
+- Trigger: {a.get('trigger_type')}
+- Conditions: {json.dumps(a.get('conditions', []))}
+- Actions: {json.dumps(a.get('actions', []))}
+- Priority: {a.get('priority')}
+
+Rule B (id: {b.get('id')}):
+- Name: {b.get('name')}
+- Trigger: {b.get('trigger_type')}
+- Conditions: {json.dumps(b.get('conditions', []))}
+- Actions: {json.dumps(b.get('actions', []))}
+- Priority: {b.get('priority')}
+
+Propose a fix. Respond ONLY with this JSON structure:
+{{
+  "explanation": "<one sentence describing the conflict>",
+  "winning_rule_id": "<id of rule that should take priority>",
+  "fix": {{
+    "rule_id": "<id of rule to modify>",
+    "field": "<'conditions' or 'priority'>",
+    "current_value": "<what it is now>",
+    "suggested_value": "<what it should be changed to>",
+    "reason": "<one sentence why>"
+  }}
+}}"""
+    try:
+        response = claude().messages.create(
+            model=MODEL,
+            max_tokens=800,
+            system=RESOLVE_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except HTTPException:
+        raise
+    except anthropic.APIStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc.message}")
+    except anthropic.APIConnectionError:
+        raise HTTPException(status_code=502, detail="Could not reach the Claude API.")
+
+    text = "".join(block.text for block in response.content if block.type == "text").strip()
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="Claude returned invalid resolver JSON.")
+    STATS["llm_calls"] += 1
+    return result
+
+
+@app.post("/api/apply-fix")
+def apply_fix(req: ApplyFixRequest):
+    fix = req.fix
+    field = fix.get("field")
+    value = fix.get("suggested_value")
+    if field == "conditions" and isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Suggested conditions must be valid JSON.")
+    if not db.update_workflow_field(fix.get("rule_id"), field, value):
+        raise HTTPException(status_code=400, detail="Could not apply the suggested fix.")
+    return {"workflow": next(w for w in db.list_workflows() if w["id"] == fix["rule_id"])}
 
 
 EXPLAIN_SYSTEM = """You explain automation rule conflicts to a business operations manager.

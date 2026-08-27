@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import { SourceBadge, PriorityBadge, Spinner, ErrorNote } from "./Shared";
 
@@ -6,7 +6,11 @@ const DEMO_RULE =
   "If order stays in packed status for more than 48 hours, alert warehouse and flag on dashboard";
 
 const EXAMPLES = [
-  { label: "Demo rule — stale packed orders", text: DEMO_RULE, source: "ERPNext" },
+  {
+    label: "Demo rule — stale packed orders",
+    text: DEMO_RULE,
+    source: "ERPNext",
+  },
   {
     label: "Conflict rule — flag big invoices",
     text: "When an invoice is submitted for more than 30000, flag it for manual review by finance",
@@ -31,7 +35,10 @@ function ParsedRule({ workflow }) {
 
         <div className="parsed-card condition">
           <div className="kicker">
-            Condition{workflow.conditions.length === 1 ? "" : `s (${workflow.conditions.length})`}
+            Condition
+            {workflow.conditions.length === 1
+              ? ""
+              : `s (${workflow.conditions.length})`}
           </div>
           <ul>
             {workflow.conditions.map((c, i) => (
@@ -42,7 +49,10 @@ function ParsedRule({ workflow }) {
 
         <div className="parsed-card action">
           <div className="kicker">
-            Action{workflow.actions.length === 1 ? "" : `s (${workflow.actions.length})`}
+            Action
+            {workflow.actions.length === 1
+              ? ""
+              : `s (${workflow.actions.length})`}
           </div>
           <ul>
             {workflow.actions.map((a, i) => (
@@ -65,7 +75,8 @@ function SimulationResults({ sim }) {
         <div>
           <div className="txt">{sim.summary}</div>
           <div className="note">
-            {sim.evaluations} condition checks across {sim.total} historical records
+            {sim.evaluations} condition checks across {sim.total} historical
+            records
           </div>
         </div>
         <div className="pill-zero">
@@ -90,10 +101,14 @@ function SimulationResults({ sim }) {
                 <td className="mono">{r.record_id}</td>
                 <td>{r.status}</td>
                 <td className="mono">
-                  {r.hours_since_update == null ? "—" : `${r.hours_since_update}h`}
+                  {r.hours_since_update == null
+                    ? "—"
+                    : `${r.hours_since_update}h`}
                 </td>
                 <td className="mono">
-                  {r.amount == null ? "—" : `₹${r.amount.toLocaleString("en-IN")}`}
+                  {r.amount == null
+                    ? "—"
+                    : `₹${r.amount.toLocaleString("en-IN")}`}
                 </td>
                 <td className={r.matched ? "match-yes" : "match-no"}>
                   {r.matched ? "✓ MATCHED" : "— not matched"}
@@ -107,13 +122,20 @@ function SimulationResults({ sim }) {
   );
 }
 
-export default function CreateWorkflow({ onDeployed }) {
+export default function CreateWorkflow({ onDeployed, onNavigate }) {
   const [text, setText] = useState(DEMO_RULE);
   const [source, setSource] = useState("ERPNext");
   const [parsed, setParsed] = useState(null);
   const [sim, setSim] = useState(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [deployment, setDeployment] = useState(null);
+
+  useEffect(() => {
+    if (!deployment) return undefined;
+    const timer = setTimeout(() => setDeployment(null), 6000);
+    return () => clearTimeout(timer);
+  }, [deployment]);
 
   const reset = () => {
     setParsed(null);
@@ -152,6 +174,7 @@ export default function CreateWorkflow({ onDeployed }) {
     setError("");
     try {
       const data = await api.createWorkflow(parsed);
+      setDeployment(data);
       reset();
       setText("");
       onDeployed(data.workflow);
@@ -164,11 +187,30 @@ export default function CreateWorkflow({ onDeployed }) {
 
   return (
     <div>
+      {deployment && (
+        <div
+          className={`deployment-banner ${deployment.conflicts_detected > 0 ? "warning" : "success"}`}
+        >
+          <span>
+            {deployment.conflicts_detected > 0
+              ? `⚠ ${deployment.conflicts_detected} conflict(s) detected with existing rules. View in Conflicts tab.`
+              : "✓ Rule deployed. No conflicts found."}
+          </span>
+          {deployment.conflicts_detected > 0 && (
+            <button
+              className="banner-link"
+              onClick={() => onNavigate("conflicts")}
+            >
+              View Conflicts
+            </button>
+          )}
+        </div>
+      )}
       <div className="card">
         <h2>Describe a rule in plain English</h2>
         <p className="sub">
-          Write it the way you would say it to a colleague. FLOW turns it into a structured,
-          executable workflow.
+          Write it the way you would say it to a colleague. FLOW turns it into a
+          structured, executable workflow.
         </p>
 
         <ErrorNote message={error} />
@@ -218,7 +260,11 @@ export default function CreateWorkflow({ onDeployed }) {
               <option>Internal</option>
             </select>
           </div>
-          <button className="btn" onClick={handleParse} disabled={busy !== "" || !text.trim()}>
+          <button
+            className="btn"
+            onClick={handleParse}
+            disabled={busy !== "" || !text.trim()}
+          >
             {busy === "parse" ? (
               <>
                 <Spinner />
@@ -262,7 +308,11 @@ export default function CreateWorkflow({ onDeployed }) {
                 "▶ Simulate"
               )}
             </button>
-            <button className="btn success" onClick={handleDeploy} disabled={busy !== ""}>
+            <button
+              className="btn success"
+              onClick={handleDeploy}
+              disabled={busy !== ""}
+            >
               {busy === "deploy" ? (
                 <>
                   <Spinner />

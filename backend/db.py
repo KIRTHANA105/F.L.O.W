@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS workflows (
     priority      TEXT    NOT NULL DEFAULT 'medium',
     status        TEXT    NOT NULL DEFAULT 'active',
     raw_text      TEXT    NOT NULL DEFAULT '',
-    created_at    TEXT    NOT NULL
+    created_at    TEXT    NOT NULL,
+    last_match_count INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -43,6 +44,7 @@ def row_to_workflow(row):
         "status": row["status"],
         "raw_text": row["raw_text"],
         "created_at": row["created_at"],
+        "last_match_count": row["last_match_count"],
     }
 
 
@@ -51,8 +53,8 @@ def insert_workflow(wf):
     cur = conn.execute(
         """INSERT INTO workflows
            (name, source_system, trigger, trigger_type, conditions, actions,
-            priority, status, raw_text, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+               priority, status, raw_text, created_at, last_match_count)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
         (
             wf.get("name") or "Untitled rule",
             wf.get("source_system", "Internal"),
@@ -64,6 +66,7 @@ def insert_workflow(wf):
             wf.get("status", "active"),
             wf.get("raw_text", ""),
             datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            wf.get("last_match_count", 0),
         ),
     )
     conn.commit()
@@ -144,6 +147,11 @@ def init_db(force_reseed=False):
     """Create the schema and seed starter workflows when the table is empty."""
     conn = connect()
     conn.executescript(SCHEMA)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(workflows)")}
+    if "last_match_count" not in columns:
+        conn.execute(
+            "ALTER TABLE workflows ADD COLUMN last_match_count INTEGER NOT NULL DEFAULT 0"
+        )
     conn.commit()
     count = conn.execute("SELECT COUNT(*) AS c FROM workflows").fetchone()["c"]
     conn.close()
@@ -160,3 +168,27 @@ def init_db(force_reseed=False):
             insert_workflow(dict(wf, status="active"))
         return len(SEED_WORKFLOWS)
     return 0
+
+
+def update_last_match_count(wf_id, match_count):
+    conn = connect()
+    conn.execute(
+        "UPDATE workflows SET last_match_count=? WHERE id=?",
+        (match_count, wf_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_workflow_field(wf_id, field, value):
+    if field not in {"conditions", "priority"}:
+        return False
+    stored_value = json.dumps(value) if field == "conditions" else value
+    conn = connect()
+    cur = conn.execute(
+        f"UPDATE workflows SET {field}=? WHERE id=?",
+        (stored_value, wf_id),
+    )
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0

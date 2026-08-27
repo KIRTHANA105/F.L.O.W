@@ -29,6 +29,8 @@ function RuleSide({ rule, stance }) {
 function ConflictCard({ conflict }) {
   const [explanation, setExplanation] = useState("");
   const [busy, setBusy] = useState(false);
+  const [suggestionBusy, setSuggestionBusy] = useState(false);
+  const [suggestion, setSuggestion] = useState(null);
   const [error, setError] = useState("");
 
   const explain = async () => {
@@ -41,6 +43,33 @@ function ConflictCard({ conflict }) {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const suggestFix = async () => {
+    setSuggestionBusy(true);
+    setError("");
+    try {
+      setSuggestion(
+        await api.resolveConflict(conflict.rule_a, conflict.rule_b),
+      );
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSuggestionBusy(false);
+    }
+  };
+
+  const applyFix = async () => {
+    setSuggestionBusy(true);
+    setError("");
+    try {
+      await api.applyFix(suggestion.fix);
+      setSuggestion(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSuggestionBusy(false);
     }
   };
 
@@ -65,11 +94,13 @@ function ConflictCard({ conflict }) {
       <div className="overlap-strip">
         <span className="tag">OVERLAP</span>
         <span>
-          <b>{conflict.overlap_label}</b> — records in this band match both rules at once.
+          <b>{conflict.overlap_label}</b> — records in this band match both
+          rules at once.
         </span>
         {affected.count > 0 && (
           <span style={{ color: "var(--muted)" }}>
-            {affected.count} live record{affected.count === 1 ? "" : "s"} affected right now:{" "}
+            {affected.count} live record{affected.count === 1 ? "" : "s"}{" "}
+            affected right now:{" "}
             <span className="mono">{affected.ids.join(", ")}</span>
           </span>
         )}
@@ -85,6 +116,15 @@ function ConflictCard({ conflict }) {
           ) : (
             "✦ Explain this conflict"
           )}
+        </button>
+        <button
+          className="btn danger-outline"
+          onClick={suggestFix}
+          disabled={busy || suggestionBusy}
+        >
+          {suggestionBusy && !suggestion
+            ? "Analyzing conflict..."
+            : "Suggest Fix"}
         </button>
         <span style={{ color: "var(--muted)", fontSize: 13 }}>
           Detection was pure Python — this button is the only LLM call.
@@ -105,6 +145,33 @@ function ConflictCard({ conflict }) {
           ))}
         </div>
       )}
+
+      {suggestion && (
+        <div className="suggestion-panel">
+          <div className="suggestion-title">Suggested resolution</div>
+          <p>{suggestion.explanation}</p>
+          <div className="suggestion-change">
+            <strong>Proposed change:</strong> {suggestion.fix.field}:{" "}
+            {suggestion.fix.current_value} → {suggestion.fix.suggested_value}
+          </div>
+          <div className="suggestion-actions">
+            <button
+              className="btn danger"
+              onClick={applyFix}
+              disabled={suggestionBusy}
+            >
+              {suggestionBusy ? "Applying..." : "Apply Fix"}
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => setSuggestion(null)}
+              disabled={suggestionBusy}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -117,8 +184,8 @@ export default function Conflicts({ result, onScan, scanning, error }) {
           <div>
             <h2>Conflict scanner</h2>
             <p className="sub" style={{ marginBottom: 0 }}>
-              Compares every active rule pair for overlapping conditions with contradictory
-              outcomes.
+              Compares every active rule pair for overlapping conditions with
+              contradictory outcomes.
             </p>
           </div>
           <button className="btn danger" onClick={onScan} disabled={scanning}>
@@ -137,7 +204,9 @@ export default function Conflicts({ result, onScan, scanning, error }) {
 
         {result && (
           <div
-            className={result.conflicts_found > 0 ? "overlap-strip" : "ok-banner"}
+            className={
+              result.conflicts_found > 0 ? "overlap-strip" : "ok-banner"
+            }
             style={{ borderRadius: 12 }}
           >
             {result.conflicts_found > 0 ? (

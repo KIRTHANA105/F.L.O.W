@@ -1,30 +1,89 @@
+import { useEffect, useState } from "react";
+import { api } from "../api";
 import { SourceBadge, PriorityBadge, summarize } from "./Shared";
+
+function HealthScore() {
+  const [health, setHealth] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const result = await api.healthScore();
+        if (mounted) setHealth(result);
+      } catch {
+        // The dashboard remains usable if health scoring is temporarily unavailable.
+      }
+    };
+    load();
+    const interval = setInterval(load, 5000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const score = health?.score ?? "—";
+  const tone =
+    typeof score !== "number"
+      ? "neutral"
+      : score >= 80
+        ? "good"
+        : score >= 50
+          ? "warn"
+          : "bad";
+  return (
+    <div className={`health-widget ${tone}`}>
+      <div className="health-score">{score}</div>
+      <div className="health-label">System Health</div>
+    </div>
+  );
+}
 
 function StatsBar({ stats }) {
   if (!stats) return null;
   return (
     <div className="stats-bar">
+      <HealthScore />
       <div className="stat llm">
-              <div className="stat-number"><span className="stat-accent" />{stats.llm_calls}</div>
+        <div className="stat-number">
+          <span className="stat-accent" />
+          {stats.llm_calls}
+        </div>
         <div className="l">LLM calls this session</div>
       </div>
       <div className="stat free">
-              <div className="stat-number"><span className="stat-accent" />{stats.rules_evaluated}</div>
+        <div className="stat-number">
+          <span className="stat-accent" />
+          {stats.rules_evaluated}
+        </div>
         <div className="l">Rules evaluated · 0 LLM</div>
       </div>
       <div className="stat free">
-              <div className="stat-number"><span className="stat-accent" />{stats.pairs_compared}</div>
+        <div className="stat-number">
+          <span className="stat-accent" />
+          {stats.pairs_compared}
+        </div>
         <div className="l">Conflict pairs · 0 LLM</div>
       </div>
       <div className="stat">
-              <div className="stat-number"><span className="stat-accent" />{stats.conflict_llm_calls}</div>
+        <div className="stat-number">
+          <span className="stat-accent" />
+          {stats.conflict_llm_calls}
+        </div>
         <div className="l">Explanations generated</div>
       </div>
     </div>
   );
 }
 
-export default function Dashboard({ workflows, stats, onRefresh, onDelete, justDeployed }) {
+export default function Dashboard({
+  workflows,
+  stats,
+  onRefresh,
+  onDelete,
+  justDeployed,
+}) {
   return (
     <div>
       <StatsBar stats={stats} />
@@ -82,7 +141,10 @@ export default function Dashboard({ workflows, stats, onRefresh, onDelete, justD
                       <PriorityBadge priority={w.priority} />
                     </td>
                     <td>
-                      <span className="status-active"><span className="status-dot" />Active</span>
+                      <span className="status-active">
+                        <span className="status-dot" />
+                        Active
+                      </span>
                     </td>
                     <td>
                       <button
