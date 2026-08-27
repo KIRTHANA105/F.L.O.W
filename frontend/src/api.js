@@ -21,56 +21,81 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  parse: (text, source_system) =>
-    request("/api/parse", {
-      method: "POST",
-      body: JSON.stringify({ text, source_system }),
-    }),
-  simulate: (workflow) =>
-    request("/api/simulate", {
-      method: "POST",
-      body: JSON.stringify({ workflow }),
-    }),
+  // --- Workflows (Dashboard) ---
   listWorkflows: () => request("/api/workflows"),
-  createWorkflow: (workflow) =>
-    request("/api/workflows", {
-      method: "POST",
-      body: JSON.stringify({ workflow }),
-    }),
+  getWorkflow: (id) => request(`/api/workflows/${id}`),
   deleteWorkflow: (id) => request(`/api/workflows/${id}`, { method: "DELETE" }),
-  scanConflicts: () => request("/api/conflicts", { method: "POST" }),
-  explainConflict: (conflict) =>
-    request("/api/explain-conflict", {
+
+  // --- New workflow creation: analyze → evaluate → adopt/reject ---
+  analyze: (text) =>
+    request("/api/analyze", {
       method: "POST",
-      body: JSON.stringify({ conflict }),
+      body: JSON.stringify({ text }),
     }),
-  resolveConflict: (rule_a, rule_b) =>
-    request("/api/resolve-conflict", {
+
+  evaluate: (proposalId) =>
+    request(`/api/evaluate/${proposalId}`, { method: "POST" }),
+
+  explainEvaluation: (data) =>
+    request("/api/evaluate/explain", {
       method: "POST",
-      body: JSON.stringify({ rule_a, rule_b }),
+      body: JSON.stringify(data),
     }),
-  applyFix: (fix) =>
-    request("/api/apply-fix", {
+
+  adoptWorkflow: (proposalId, originWorkflowId, steps) =>
+    request(`/api/workflows/${proposalId}/adopt`, {
       method: "POST",
-      body: JSON.stringify({ fix }),
+      body: JSON.stringify({
+        origin_workflow_id: originWorkflowId || null,
+        steps: steps || null,
+      }),
     }),
-  memory: () => request("/api/memory"),
-  policies: () => request("/api/policies"),
-  createPolicy: (text) =>
-    request("/api/policies", { method: "POST", body: JSON.stringify({ text }) }),
-  togglePolicy: (id, active) =>
-    request(`/api/policies/${id}`, {
+
+  rejectWorkflow: (proposalId) =>
+    request(`/api/workflows/${proposalId}/reject`, { method: "POST" }),
+
+  // --- Process Memory (graph) ---
+  processMemory: () => request("/api/process-memory"),
+
+  // --- Policy documents (upload .txt / .pdf) ---
+  policyDocuments: () => request("/api/policy-documents"),
+
+  uploadPolicyDocument: (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetch(`${BASE}/api/policy-documents/upload`, {
+      method: "POST",
+      body: formData,
+    }).then(async (res) => {
+      if (!res.ok) {
+        let detail = `Upload failed (${res.status})`;
+        try {
+          const body = await res.json();
+          if (body.detail) detail = body.detail;
+        } catch { /* non-JSON */ }
+        throw new Error(detail);
+      }
+      return res.json();
+    });
+  },
+
+  togglePolicyRule: (ruleId, active) =>
+    request(`/api/policy-rules/${ruleId}`, {
       method: "PATCH",
       body: JSON.stringify({ active }),
     }),
-  deletePolicy: (id) => request(`/api/policies/${id}`, { method: "DELETE" }),
+
+  deletePolicyRule: (ruleId) =>
+    request(`/api/policy-rules/${ruleId}`, { method: "DELETE" }),
+
+  // --- Meta / Demo ---
+  stats: () => request("/api/stats"),
   demoMode: () => request("/api/demo-mode"),
   setDemoMode: (enabled) =>
     request("/api/demo-mode", {
       method: "POST",
       body: JSON.stringify({ enabled }),
     }),
-  stats: () => request("/api/stats"),
-  healthScore: () => request("/api/health-score"),
   reset: () => request("/api/reset", { method: "POST" }),
+  health: () => request("/api/health"),
 };

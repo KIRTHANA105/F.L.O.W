@@ -1,207 +1,277 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { SourceBadge, Spinner, ErrorNote } from "./Shared";
+import { DepartmentBadge, Spinner, ErrorNote } from "./Shared";
 
 /**
- * BPM Explorer - the Business Process Memory made visible.
+ * Process Memory — the company's full operational architecture.
  *
- * Department-grouped tree (spec 4.5): expand a department to see its workflows,
- * expand a workflow to see the capabilities it provides and the policies that
- * govern it. Capabilities used by more than one department are marked SHARED,
- * because that cross-department reuse is the thing a tree normally hides.
+ * Shows the process graph as a department-grouped layout with
+ * workflow nodes and dependency edges visualized as SVG arrows.
+ * Clicking a node shows detail on the right.
  */
+
+const DEPT_COLORS = {
+  Sales: "#6366f1",
+  Finance: "#10b981",
+  Legal: "#f59e0b",
+  "Customer Success": "#3b82f6",
+  Support: "#8b5cf6",
+  Procurement: "#f97316",
+  Operations: "#6b7280",
+};
+
+const REL_STYLE = {
+  precedes: { stroke: "#6b7280", dash: "none", label: "precedes" },
+  requires: { stroke: "#ef4444", dash: "6,3", label: "requires" },
+  triggers: { stroke: "#3b82f6", dash: "4,2", label: "triggers" },
+};
+
+// ─── Node detail side panel ───────────────────────────────────────────────────
+function NodeDetail({ workflow, allWorkflows, edges, onClose }) {
+  if (!workflow) return null;
+  const byId = Object.fromEntries(allWorkflows.map((w) => [w.id, w]));
+  const outgoing = edges.filter((e) => e.from_workflow_id === workflow.id);
+  const incoming = edges.filter((e) => e.to_workflow_id === workflow.id);
+
+  return (
+    <div className="memory-detail-panel">
+      <div className="memory-detail-header">
+        <div>
+          <DepartmentBadge department={workflow.department} />
+          <h3 className="memory-detail-name">{workflow.name}</h3>
+        </div>
+        <button className="modal-close" onClick={onClose}>✕</button>
+      </div>
+      <p className="memory-detail-desc">{workflow.description}</p>
+
+      <div className="memory-detail-section">
+        <div className="memory-detail-label">Steps</div>
+        <div className="step-flow compact">
+          {(workflow.steps || []).map((s, i) => (
+            <div key={i} className="step-flow-item compact">
+              <div className="step-node compact">
+                <div className="step-num compact">{i + 1}</div>
+                <div className="step-info">
+                  <div className="step-name">{s.name}</div>
+                  {s.description && (
+                    <div className="step-desc">{s.description}</div>
+                  )}
+                </div>
+              </div>
+              {i < (workflow.steps || []).length - 1 && (
+                <div className="step-connector compact" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {workflow.business_rules?.length > 0 && (
+        <div className="memory-detail-section">
+          <div className="memory-detail-label">Business Rules</div>
+          {workflow.business_rules.map((r, i) => (
+            <div key={i} className="business-rule-row compact">
+              <div className="rule-condition">◆ {r.condition}</div>
+              <div className="rule-path">→ {r.path}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(incoming.length > 0 || outgoing.length > 0) && (
+        <div className="memory-detail-section">
+          <div className="memory-detail-label">Process Connections</div>
+          {incoming.map((e, i) => (
+            <div key={`in-${i}`} className="connection-row in">
+              <span className="conn-arrow">← </span>
+              <span className="conn-name">
+                {byId[e.from_workflow_id]?.name || "?"}
+              </span>
+              <span className="conn-rel">{e.relationship}</span>
+            </div>
+          ))}
+          {outgoing.map((e, i) => (
+            <div key={`out-${i}`} className="connection-row out">
+              <span className="conn-arrow">→ </span>
+              <span className="conn-name">
+                {byId[e.to_workflow_id]?.name || "?"}
+              </span>
+              <span className="conn-rel">{e.relationship}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Department cluster ───────────────────────────────────────────────────────
+function DeptCluster({ dept, workflows, selectedId, onSelect }) {
+  const color = DEPT_COLORS[dept] || DEPT_COLORS.Operations;
+  return (
+    <div
+      className="dept-cluster"
+      style={{ "--dept-color": color }}
+    >
+      <div className="cluster-header">
+        <span className="cluster-dot" style={{ background: color }} />
+        <span className="cluster-name">{dept}</span>
+        <span className="cluster-count">{workflows.length}</span>
+      </div>
+      <div className="cluster-nodes">
+        {workflows.map((wf) => (
+          <button
+            key={wf.id}
+            id={`wf-node-${wf.id}`}
+            className={`memory-node${selectedId === wf.id ? " selected" : ""}`}
+            onClick={() => onSelect(wf)}
+            style={{ borderColor: color }}
+          >
+            <div className="node-name">{wf.name}</div>
+            <div className="node-meta">{wf.step_count || wf.steps?.length || 0} steps</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function Explorer() {
-  const [memory, setMemory] = useState(null);
+  const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [openDepts, setOpenDepts] = useState({});
-  const [openFlows, setOpenFlows] = useState({});
-  const [view, setView] = useState("tree");
+  const [selected, setSelected] = useState(null);
 
   const load = async () => {
     try {
-      const data = await api.memory();
-      setMemory(data);
-      // Open every department by default: an empty-looking tree reads as "no memory".
-      setOpenDepts(
-        Object.fromEntries(data.tree.map((t) => [t.department, true])),
-      );
+      const d = await api.processMemory();
+      setData(d);
       setError("");
     } catch (e) {
       setError(e.message);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   if (error) return <ErrorNote message={error} />;
-  if (!memory) {
+  if (!data) {
     return (
-      <div className="card">
-        <Spinner />
-        Loading process memory…
+      <div className="card" style={{ textAlign: "center", padding: 48 }}>
+        <Spinner /> <span style={{ marginLeft: 10 }}>Loading process memory…</span>
       </div>
     );
   }
 
-  const toggleDept = (d) =>
-    setOpenDepts((s) => ({ ...s, [d]: !s[d] }));
-  const toggleFlow = (id) =>
-    setOpenFlows((s) => ({ ...s, [id]: !s[id] }));
+  const { departments, nodes, edges, workflow_count, policy_count } = data;
+
+  const statsItems = [
+    { n: workflow_count, l: "Workflows" },
+    { n: edges.length, l: "Process connections" },
+    { n: departments.length, l: "Departments" },
+    { n: policy_count, l: "Active policies" },
+  ];
+
+  // Build a lookup of all workflows for the detail panel
+  const allWorkflows = departments.flatMap((d) => d.workflows || []);
 
   return (
-    <div>
-      <div className="stats-bar">
-        <div className="stat">
-          <div className="n">{memory.workflow_count}</div>
-          <div className="l">Workflows in memory</div>
+    <div className="memory-page">
+      {/* Header */}
+      <div className="memory-header">
+        <div>
+          <h2 className="section-heading">Process Memory</h2>
+          <p className="section-sub">
+            Nexora Technologies' complete operational architecture — workflows,
+            dependencies, and the business rules that govern them.
+          </p>
         </div>
-        <div className="stat llm">
-          <div className="n">{memory.capability_count}</div>
-          <div className="l">Capabilities indexed</div>
-        </div>
-        <div className="stat">
-          <div className="n">{memory.policy_count}</div>
-          <div className="l">Active policies</div>
-        </div>
-        <div className="stat free">
-          <div className="n">{memory.shared_count}</div>
-          <div className="l">Shared across depts</div>
+        <button className="btn ghost btn-sm" onClick={load}>↻ Refresh</button>
+      </div>
+
+      {/* Stats */}
+      <div className="memory-stats">
+        {statsItems.map((s) => (
+          <div key={s.l} className="memory-stat">
+            <div className="memory-stat-n">{s.n}</div>
+            <div className="memory-stat-l">{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="graph-legend">
+        {Object.entries(REL_STYLE).map(([rel, style]) => (
+          <div key={rel} className="legend-item">
+            <svg width="28" height="10">
+              <line
+                x1="0" y1="5" x2="28" y2="5"
+                stroke={style.stroke}
+                strokeWidth="2"
+                strokeDasharray={style.dash === "none" ? undefined : style.dash}
+              />
+            </svg>
+            <span>{rel}</span>
+          </div>
+        ))}
+        <div className="legend-item">
+          <div className="legend-node-sample" />
+          <span>workflow node (click for details)</span>
         </div>
       </div>
 
-      <div className="card">
-        <div className="section-title">
-          <div>
-            <h2>Business Process Memory</h2>
-            <p className="sub" style={{ marginBottom: 0 }}>
-              Everything this company has automated, grouped by the team that owns it.
-            </p>
+      <div className={`memory-layout${selected ? " has-detail" : ""}`}>
+        {/* Graph area */}
+        <div className="memory-graph">
+          <div className="dept-clusters">
+            {departments.map((d) => (
+              <DeptCluster
+                key={d.department}
+                dept={d.department}
+                workflows={d.workflows || []}
+                selectedId={selected?.id}
+                onSelect={(wf) =>
+                  setSelected((prev) => (prev?.id === wf.id ? null : wf))
+                }
+              />
+            ))}
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div className="tabs" style={{ padding: 4 }}>
-              <button
-                className={`tab ${view === "tree" ? "active" : ""}`}
-                onClick={() => setView("tree")}
-              >
-                Tree
-              </button>
-              <button
-                className={`tab ${view === "caps" ? "active" : ""}`}
-                onClick={() => setView("caps")}
-              >
-                Capabilities
-              </button>
+
+          {/* Dependency edges as a simple visual list below clusters */}
+          {edges.length > 0 && (
+            <div className="edge-list">
+              <div className="edge-list-label">Process Dependencies</div>
+              {edges.map((e) => {
+                const fromWf = allWorkflows.find((w) => w.id === e.from_workflow_id);
+                const toWf = allWorkflows.find((w) => w.id === e.to_workflow_id);
+                const style = REL_STYLE[e.relationship] || REL_STYLE.precedes;
+                return (
+                  <div key={e.id} className="edge-row">
+                    <span className="edge-from">{fromWf?.name || "?"}</span>
+                    <span
+                      className="edge-rel-badge"
+                      style={{ color: style.stroke, borderColor: style.stroke }}
+                    >
+                      {e.relationship}
+                    </span>
+                    <span className="edge-arrow-line" style={{ color: style.stroke }}>→</span>
+                    <span className="edge-to">{toWf?.name || "?"}</span>
+                    {e.label && <span className="edge-label-text">{e.label}</span>}
+                  </div>
+                );
+              })}
             </div>
-            <button className="btn ghost" onClick={load}>
-              ↻ Refresh
-            </button>
-          </div>
+          )}
         </div>
 
-        {view === "tree" ? (
-          <div className="tree">
-            {memory.tree.map((dept) => (
-              <div className="tree-dept" key={dept.department}>
-                <button
-                  className="tree-row dept"
-                  onClick={() => toggleDept(dept.department)}
-                >
-                  <span className="caret">
-                    {openDepts[dept.department] ? "▾" : "▸"}
-                  </span>
-                  <span className="tree-name">{dept.department}</span>
-                  <span className="tree-meta">
-                    {dept.workflow_count} workflow
-                    {dept.workflow_count === 1 ? "" : "s"} ·{" "}
-                    {dept.capability_count} capabilit
-                    {dept.capability_count === 1 ? "y" : "ies"}
-                  </span>
-                </button>
-
-                {openDepts[dept.department] &&
-                  dept.workflows.map((wf) => (
-                    <div key={wf.id}>
-                      <button
-                        className="tree-row flow"
-                        onClick={() => toggleFlow(wf.id)}
-                      >
-                        <span className="caret">
-                          {openFlows[wf.id] ? "▾" : "▸"}
-                        </span>
-                        <SourceBadge system={wf.source_system} />
-                        <span className="tree-name">{wf.name}</span>
-                        <span className="tree-meta">{wf.trigger}</span>
-                      </button>
-
-                      {openFlows[wf.id] && (
-                        <div className="tree-detail">
-                          <div className="tree-detail-label">Provides</div>
-                          {wf.capabilities.length === 0 ? (
-                            <div className="tree-empty">
-                              No capabilities registered
-                            </div>
-                          ) : (
-                            wf.capabilities.map((c) => (
-                              <div className="tree-cap" key={c.key}>
-                                <span className="tree-cap-desc">
-                                  {c.description}
-                                </span>
-                                <code className="memory-key">{c.key}</code>
-                                {c.shared && (
-                                  <span className="shared-tag">SHARED</span>
-                                )}
-                              </div>
-                            ))
-                          )}
-
-                          {wf.governed_by.length > 0 && (
-                            <>
-                              <div className="tree-detail-label">
-                                Governed by
-                              </div>
-                              {wf.governed_by.map((p) => (
-                                <div className="tree-policy" key={p.id}>
-                                  § {p.text}
-                                </div>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="memory-list">
-            {memory.capabilities.map((c) => (
-              <div
-                className={`memory-row ${c.shared ? "build" : "reuse"}`}
-                key={c.key}
-              >
-                <span className={`memory-tag ${c.shared ? "build" : "reuse"}`}>
-                  {c.shared ? "SHARED" : "OWNED"}
-                </span>
-                <div className="memory-body">
-                  <div className="memory-cap">{c.description}</div>
-                  <div className="memory-src">
-                    used by{" "}
-                    {c.providers.map((p, i) => (
-                      <span key={p.workflow_id}>
-                        {i > 0 && ", "}
-                        <b>{p.name}</b>{" "}
-                        <span className="memory-dept">{p.department}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <code className="memory-key">{c.key}</code>
-              </div>
-            ))}
-          </div>
+        {/* Detail side panel */}
+        {selected && (
+          <NodeDetail
+            workflow={selected}
+            allWorkflows={allWorkflows}
+            edges={edges}
+            onClose={() => setSelected(null)}
+          />
         )}
       </div>
     </div>

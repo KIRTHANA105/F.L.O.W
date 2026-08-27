@@ -1,211 +1,169 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
-import { SourceBadge, PriorityBadge, summarize } from "./Shared";
+import { useState } from "react";
+import { DepartmentBadge, StatusDot } from "./Shared";
+import WorkflowDetailModal from "./WorkflowDetailModal";
+import CreateWorkflowModal from "./CreateWorkflowModal";
 
-function HealthScore() {
-  const [health, setHealth] = useState(null);
+const DEPT_ORDER = [
+  "Sales",
+  "Finance",
+  "Legal",
+  "Customer Success",
+  "Support",
+  "Procurement",
+  "Operations",
+];
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        const result = await api.healthScore();
-        if (mounted) setHealth(result);
-      } catch {
-        // The dashboard remains usable if health scoring is temporarily unavailable.
-      }
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const score = health?.score ?? "—";
-  const tone =
-    typeof score !== "number"
-      ? "neutral"
-      : score >= 80
-        ? "good"
-        : score >= 50
-          ? "warn"
-          : "bad";
-  return (
-    <div className={`health-widget ${tone}`}>
-      <div className="health-score">{score}</div>
-      <div className="health-label">System Health</div>
-    </div>
-  );
-}
-
-function StatsBar({ stats }) {
-  if (!stats) return null;
-  return (
-    <div className="stats-bar">
-      <HealthScore />
-      <div className="stat llm">
-        <div className="stat-number">
-          <span className="stat-accent" />
-          {stats.llm_calls}
-        </div>
-        <div className="l">LLM calls this session</div>
-      </div>
-      <div className="stat free">
-        <div className="stat-number">
-          <span className="stat-accent" />
-          {stats.rules_evaluated}
-        </div>
-        <div className="l">Rules evaluated · 0 LLM</div>
-      </div>
-      <div className="stat free">
-        <div className="stat-number">
-          <span className="stat-accent" />
-          {stats.pairs_compared}
-        </div>
-        <div className="l">Conflict pairs · 0 LLM</div>
-      </div>
-      <div className="stat">
-        <div className="stat-number">
-          <span className="stat-accent" />
-          {stats.conflict_llm_calls}
-        </div>
-        <div className="l">Explanations generated</div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Demo insurance: serves recorded responses instead of calling the API.
- * The free tier allows 20 LLM requests/day/model, so this is what keeps the
- * demo alive on a spent quota or dead venue wifi.
- */
-function SafetyToggle() {
-  const [state, setState] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api.demoMode().then(setState).catch(() => setState(null));
-  }, []);
-
-  if (!state) return null;
-
-  const toggle = async () => {
-    setBusy(true);
-    try {
-      setState(await api.setDemoMode(!state.safety_mode));
-    } catch {
-      /* leave the last known state on screen */
-    } finally {
-      setBusy(false);
-    }
-  };
+function WorkflowCard({ workflow, onClick }) {
+  const connectionCount =
+    (workflow.leads_to?.length || 0) + (workflow.depends_on?.length || 0);
+  const previewSteps = (workflow.steps || []).slice(0, 4);
 
   return (
-    <button
-      className={`safety-toggle ${state.safety_mode ? "on" : ""}`}
-      onClick={toggle}
-      disabled={busy}
-      title={`${state.cache.total} recorded response(s) available offline`}
+    <div
+      className="workflow-card"
+      onClick={() => onClick(workflow)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onClick(workflow)}
+      aria-label={`View details for ${workflow.name}`}
     >
-      <span className="safety-dot" />
-      Safety Mode {state.safety_mode ? "ON" : "OFF"}
-      <span style={{ opacity: 0.7 }}>· {state.cache.total} cached</span>
-    </button>
+      <div className="wf-card-header">
+        <DepartmentBadge department={workflow.department} />
+        <StatusDot status="Active" />
+      </div>
+
+      <h3 className="wf-card-name">{workflow.name}</h3>
+      <p className="wf-card-desc">{workflow.description}</p>
+
+      <div className="wf-card-steps">
+        {previewSteps.map((s, i) => (
+          <span key={i} className="wf-step-chip">
+            {s.name}
+            {i < previewSteps.length - 1 && (
+              <span className="wf-step-arrow"> →</span>
+            )}
+          </span>
+        ))}
+        {(workflow.steps || []).length > 4 && (
+          <span className="wf-step-chip muted">
+            +{workflow.steps.length - 4} more
+          </span>
+        )}
+      </div>
+
+      <div className="wf-card-footer">
+        <span className="wf-meta">
+          {workflow.steps?.length || 0} steps
+        </span>
+        {connectionCount > 0 && (
+          <span className="wf-meta wf-connections">
+            ⟷ {connectionCount} connection{connectionCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {workflow.business_rules?.length > 0 && (
+          <span className="wf-meta wf-rules">
+            ◆ {workflow.business_rules.length} rule
+            {workflow.business_rules.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
-
 
 export default function Dashboard({
   workflows,
-  stats,
   onRefresh,
-  onDelete,
+  onCreateWorkflow,
+  triggerAiGlow,
   justDeployed,
 }) {
+  const [selectedWorkflow, setSelectedWorkflow] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  // Group by department in a stable order
+  const byDept = {};
+  for (const wf of workflows) {
+    byDept[wf.department] = byDept[wf.department] || [];
+    byDept[wf.department].push(wf);
+  }
+  const orderedDepts = DEPT_ORDER.filter((d) => byDept[d]);
+
+  const handleCardClick = (wf) => setSelectedWorkflow(wf);
+
   return (
-    <div>
-      <StatsBar stats={stats} />
-
-      <div className="card">
-        <div className="section-title">
-          <div>
-            <h2>Active Rules</h2>
-            <p className="sub" style={{ marginBottom: 0 }}>
-              Every rule currently live across your connected systems.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <SafetyToggle />
-            <button className="btn ghost" onClick={onRefresh}>
-              ↻ Refresh
-            </button>
-          </div>
+    <div className="dashboard-page">
+      {justDeployed && (
+        <div className="ok-banner adoption-banner">
+          ✓ <strong>"{justDeployed}"</strong> has been added to Nexora's process memory.
         </div>
+      )}
 
-        {justDeployed && (
-          <div className="ok-banner" style={{ marginBottom: 18 }}>
-            ✓ “{justDeployed}” is now live and monitoring incoming records.
-          </div>
-        )}
-
-        {workflows.length === 0 ? (
-          <div className="empty">
-            <div className="icon">◇</div>
-            No workflows yet — create one on the Create Workflow tab.
-          </div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Rule</th>
-                  <th>Trigger</th>
-                  <th>Conditions</th>
-                  <th>Actions</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {workflows.map((w) => (
-                  <tr key={w.id}>
-                    <td>
-                      <SourceBadge system={w.source_system} />
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{w.name}</td>
-                    <td>{w.trigger}</td>
-                    <td className="cond-summary">{summarize(w.conditions)}</td>
-                    <td className="cond-summary">{summarize(w.actions)}</td>
-                    <td>
-                      <PriorityBadge priority={w.priority} />
-                    </td>
-                    <td>
-                      <span className="status-active">
-                        <span className="status-dot" />
-                        Active
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="remove-button"
-                        title="Remove workflow"
-                        onClick={() => onDelete(w.id)}
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div className="dashboard-header">
+        <div>
+          <h2 className="section-heading">Active Workflows</h2>
+          <p className="section-sub">
+            How Nexora Technologies currently operates — {workflows.length}{" "}
+            workflows across {orderedDepts.length} departments.
+          </p>
+        </div>
+        <div className="dashboard-actions">
+          <button className="btn ghost btn-sm" onClick={onRefresh}>
+            ↻ Refresh
+          </button>
+          <button
+            id="create-workflow-btn"
+            className="btn create-btn"
+            onClick={() => setShowCreate(true)}
+            title="Propose a new workflow"
+          >
+            + New Workflow
+          </button>
+        </div>
       </div>
+
+      {workflows.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">◇</div>
+          <p>No workflows yet. Click <strong>+ New Workflow</strong> to begin.</p>
+        </div>
+      ) : (
+        orderedDepts.map((dept) => (
+          <div key={dept} className="dept-section">
+            <div className="dept-label">
+              <DepartmentBadge department={dept} />
+              <span className="dept-count">{byDept[dept].length} workflow{byDept[dept].length !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="workflow-grid">
+              {byDept[dept].map((wf) => (
+                <WorkflowCard
+                  key={wf.id}
+                  workflow={wf}
+                  onClick={handleCardClick}
+                />
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+
+      {selectedWorkflow && (
+        <WorkflowDetailModal
+          workflow={selectedWorkflow}
+          onClose={() => setSelectedWorkflow(null)}
+        />
+      )}
+
+      {showCreate && (
+        <CreateWorkflowModal
+          onClose={() => setShowCreate(false)}
+          onResult={(result) => {
+            setShowCreate(false);
+            onCreateWorkflow(result);
+          }}
+          triggerAiGlow={triggerAiGlow}
+        />
+      )}
     </div>
   );
 }

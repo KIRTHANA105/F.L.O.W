@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import Dashboard from "./components/Dashboard";
-import CreateWorkflow from "./components/CreateWorkflow";
 import Conflicts from "./components/Conflicts";
 import Explorer from "./components/Explorer";
 import Policies from "./components/Policies";
@@ -9,9 +8,8 @@ import Auth from "./pages/Auth";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
-  { id: "create", label: "Create Workflow" },
-  { id: "conflicts", label: "Conflicts" },
   { id: "memory", label: "Process Memory" },
+  { id: "conflicts", label: "Conflicts" },
   { id: "policies", label: "Policies" },
 ];
 
@@ -19,14 +17,12 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [workflows, setWorkflows] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [justDeployed, setJustDeployed] = useState("");
-  const [conflictResult, setConflictResult] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [conflictError, setConflictError] = useState("");
   const [bootError, setBootError] = useState("");
   const [aiActive, setAiActive] = useState(false);
   const [welcome, setWelcome] = useState("");
+  const [justDeployed, setJustDeployed] = useState("");
+  // pending = { proposal, evaluation, rawText } — created by CreateWorkflowModal
+  const [pendingConflict, setPendingConflict] = useState(null);
   const glowTimer = useRef(null);
 
   const triggerAiGlow = useCallback((durationMs = 3000) => {
@@ -52,63 +48,62 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [wf, st] = await Promise.all([api.listWorkflows(), api.stats()]);
+      const wf = await api.listWorkflows();
       setWorkflows(wf.workflows);
-      setStats(st);
       setBootError("");
     } catch (e) {
-      setBootError(`${e.message} — is the backend running on port 8000?`);
+      setBootError(`${e.message} — is the backend running on port 8010?`);
     }
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      refresh();
-    }
+    if (isAuthenticated) refresh();
   }, [isAuthenticated, refresh]);
 
   if (!isAuthenticated) {
     return <Auth onSuccess={handleAuthSuccess} triggerAiGlow={triggerAiGlow} />;
   }
 
-  const handleDeployed = async (wf) => {
+  /**
+   * Called by CreateWorkflowModal when analyze + evaluate is done.
+   * Saves the result and navigates to Conflicts.
+   */
+  const handleWorkflowResult = (result) => {
+    setPendingConflict(result);
+    setTab("conflicts");
+  };
+
+  /**
+   * Called when a proposed workflow is adopted on the Conflicts page.
+   */
+  const handleAdopt = async (adoptedWorkflow) => {
     await refresh();
-    setJustDeployed(wf.name);
-    setConflictResult(null); // stale once the rule set changes
-    setTimeout(() => setJustDeployed(""), 8000);
-  };
-
-  const handleDelete = async (id) => {
-    await api.deleteWorkflow(id);
-    setConflictResult(null);
-    refresh();
-  };
-
-  const handleScan = async () => {
-    triggerAiGlow();
-    setScanning(true);
-    setConflictError("");
-    try {
-      setConflictResult(await api.scanConflicts());
-      refresh();
-    } catch (e) {
-      setConflictError(e.message);
-    } finally {
-      setScanning(false);
+    if (adoptedWorkflow?.name) {
+      setJustDeployed(adoptedWorkflow.name);
+      setTimeout(() => setJustDeployed(""), 8000);
     }
+    setPendingConflict(null);
   };
 
-  const conflictCount = conflictResult?.conflicts_found || 0;
+  /**
+   * Called when a proposed workflow is rejected.
+   */
+  const handleReject = () => {
+    setPendingConflict(null);
+  };
+
+  const conflictPending = !!pendingConflict;
 
   return (
     <div className={aiActive ? "ai-glow-active app" : "app"}>
       {welcome && <div className="welcome-toast">{welcome}</div>}
+
       <div className="topbar ai-header-pulse">
         <div className="brand">
           <div className="logo">F</div>
           <div>
             <h1>FLOW</h1>
-            <p>Rule Intelligence · Copilot</p>
+            <p>Business Process Intelligence</p>
           </div>
         </div>
 
@@ -120,8 +115,8 @@ export default function App() {
               onClick={() => setTab(t.id)}
             >
               {t.label}
-              {t.id === "conflicts" && conflictCount > 0 && (
-                <span className="badge-count">{conflictCount}</span>
+              {t.id === "conflicts" && conflictPending && (
+                <span className="badge-count">1</span>
               )}
             </button>
           ))}
@@ -133,34 +128,26 @@ export default function App() {
       {tab === "dashboard" && (
         <Dashboard
           workflows={workflows}
-          stats={stats}
           onRefresh={refresh}
-          onDelete={handleDelete}
-          justDeployed={justDeployed}
-        />
-      )}
-
-      {tab === "create" && (
-        <CreateWorkflow
-          onDeployed={handleDeployed}
-          onNavigate={setTab}
+          onCreateWorkflow={handleWorkflowResult}
           triggerAiGlow={triggerAiGlow}
+          justDeployed={justDeployed}
         />
       )}
 
       {tab === "memory" && <Explorer />}
 
-      {tab === "policies" && <Policies triggerAiGlow={triggerAiGlow} />}
-
       {tab === "conflicts" && (
         <Conflicts
-          result={conflictResult}
-          onScan={handleScan}
-          scanning={scanning}
-          error={conflictError}
+          pending={pendingConflict}
+          onAdopt={handleAdopt}
+          onReject={handleReject}
+          onNavigate={setTab}
           triggerAiGlow={triggerAiGlow}
         />
       )}
+
+      {tab === "policies" && <Policies triggerAiGlow={triggerAiGlow} />}
     </div>
   );
 }

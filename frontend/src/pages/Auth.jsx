@@ -106,7 +106,7 @@ export default function Auth({ onSuccess, triggerAiGlow }) {
         <div className="auth-brand">
           <div className="auth-logo">F</div>
           <div className="auth-wordmark">FLOW</div>
-          <div className="auth-tagline">Rule Intelligence · Copilot</div>
+          <div className="auth-tagline">Business Process Intelligence</div>
         </div>
 
         <div className="auth-tabs" role="tablist">
