@@ -38,8 +38,9 @@ export default function App() {
     glowTimer.current = setTimeout(() => setAiActive(false), durationMs);
   }, []);
 
-  const handleNavigateToSimulation = (wfId, scenarioCount) => {
-    setSimWorkflowId(wfId);
+  const handleNavigateToSimulation = (wfId) => {
+    if (wfId) setSimWorkflowId(wfId);
+    refresh();
     setTab("simulation");
   };
 
@@ -60,7 +61,7 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const wf = await api.listWorkflows();
+      const wf = await api.listWorkflows(true);
       setWorkflows(wf.workflows);
       setBootError("");
     } catch (e) {
