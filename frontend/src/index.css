@@ -6,26 +6,58 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
 :root {
-  --bg: #0d0f14;
-  --panel: #13161e;
-  --panel-2: #1a1e29;
-  --panel-3: #21263a;
-  --line: #2a3045;
-  --line-2: #3a4160;
-  --text: #e8ecf5;
-  --muted: #6b7a99;
-  --muted-2: #4a546e;
-  --accent: #6366f1;
-  --accent-hover: #4f52d6;
-  --accent-dim: rgba(99, 102, 241, 0.12);
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-2: #f1f5f9;
+  --panel-3: #e2e8f0;
+  --line: #e2e8f0;
+  --line-2: #cbd5e1;
+  --text: #0f172a;
+  --muted: #475569;
+  --muted-2: #94a3b8;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-dim: rgba(79, 70, 229, 0.08);
   --green: #10b981;
-  --green-dim: rgba(16, 185, 129, 0.1);
+  --green-dim: rgba(16, 185, 129, 0.08);
   --red: #ef4444;
-  --red-dim: rgba(239, 68, 68, 0.1);
-  --amber: #f59e0b;
-  --amber-dim: rgba(245, 158, 11, 0.1);
+  --red-dim: rgba(239, 68, 68, 0.08);
+  --amber: #d97706;
+  --amber-dim: rgba(217, 119, 6, 0.08);
 
-  color-scheme: dark;
+  /* Topbar background */
+  --topbar-bg: rgba(248, 250, 252, 0.95);
+
+  /* Department colors */
+  --sales-bg: rgba(79, 70, 229, 0.08);
+  --sales-text: #4f46e5;
+  --sales-border: rgba(79, 70, 229, 0.3);
+
+  --finance-bg: rgba(16, 185, 129, 0.08);
+  --finance-text: #059669;
+  --finance-border: rgba(16, 185, 129, 0.3);
+
+  --legal-bg: rgba(245, 158, 11, 0.08);
+  --legal-text: #d97706;
+  --legal-border: rgba(245, 158, 11, 0.3);
+
+  --cs-bg: rgba(37, 99, 235, 0.08);
+  --cs-text: #2563eb;
+  --cs-border: rgba(37, 99, 235, 0.3);
+
+  --support-bg: rgba(124, 58, 237, 0.08);
+  --support-text: #7c3aed;
+  --support-border: rgba(124, 58, 237, 0.3);
+
+  --procure-bg: rgba(234, 88, 12, 0.08);
+  --procure-text: #ea580c;
+  --procure-border: rgba(234, 88, 12, 0.3);
+
+  --ops-bg: rgba(75, 85, 99, 0.08);
+  --ops-text: #4b5563;
+  --ops-border: rgba(75, 85, 99, 0.3);
+
+  color-scheme: light;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
@@ -52,7 +84,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(13, 15, 20, 0.95);
+  background: var(--topbar-bg);
   border-bottom: 1px solid var(--line);
   margin: -28px -24px 32px;
   padding: 0 32px;
@@ -382,13 +414,13 @@ label.field {
   white-space: nowrap;
 }
 
-.dept-sales           { background: rgba(99,102,241,.18); color: #a5b4fc; border: 1px solid rgba(99,102,241,.4); }
-.dept-finance         { background: rgba(16,185,129,.18); color: #6ee7b7; border: 1px solid rgba(16,185,129,.4); }
-.dept-legal           { background: rgba(245,158,11,.18); color: #fcd34d; border: 1px solid rgba(245,158,11,.4); }
-.dept-customer-success{ background: rgba(59,130,246,.18); color: #93c5fd; border: 1px solid rgba(59,130,246,.4); }
-.dept-support         { background: rgba(139,92,246,.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,.4); }
-.dept-procurement     { background: rgba(249,115,22,.18); color: #fdba74; border: 1px solid rgba(249,115,22,.4); }
-.dept-operations      { background: rgba(107,114,128,.18); color: #d1d5db; border: 1px solid rgba(107,114,128,.4); }
+.dept-sales           { background: var(--sales-bg); color: var(--sales-text); border: 1px solid var(--sales-border); }
+.dept-finance         { background: var(--finance-bg); color: var(--finance-text); border: 1px solid var(--finance-border); }
+.dept-legal           { background: var(--legal-bg); color: var(--legal-text); border: 1px solid var(--legal-border); }
+.dept-customer-success{ background: var(--cs-bg); color: var(--cs-text); border: 1px solid var(--cs-border); }
+.dept-support         { background: var(--support-bg); color: var(--support-text); border: 1px solid var(--support-border); }
+.dept-procurement     { background: var(--procure-bg); color: var(--procure-text); border: 1px solid var(--procure-border); }
+.dept-operations      { background: var(--ops-bg); color: var(--ops-text); border: 1px solid var(--ops-border); }
 
 /* =======================================================================
    DASHBOARD
