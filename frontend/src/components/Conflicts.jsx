@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { Spinner, ErrorNote, DepartmentBadge } from "./Shared";
+import SimulationRecommendation from "./SimulationRecommendation";
 
 /**
  * Conflicts page — three-panel layout:
@@ -224,23 +225,259 @@ function VerdictBanner({ status, reasoning, explanation, explaining, onExplain }
   );
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-function EmptyState({ onDashboard }) {
+// ─── System-wide conflicts view (when not reviewing a single proposal) ─────────
+function SystemConflictsView({ onDashboard, onNavigate, triggerAiGlow }) {
+  const [conflicts, setConflicts] = useState([]);
+  const [workflows, setWorkflows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
+  const [error, setError] = useState("");
+  const [seedNotice, setSeedNotice] = useState("");
+
+  const loadConflicts = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [cRes, wRes] = await Promise.all([
+        api.getConflicts(),
+        api.listWorkflows(),
+      ]);
+      setConflicts(cRes.conflicts || []);
+      setWorkflows(wRes.workflows || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConflicts();
+  }, [loadConflicts]);
+
+  const handleSeedSamples = async () => {
+    setSeeding(true);
+    setError("");
+    setSeedNotice("");
+    triggerAiGlow?.();
+    try {
+      const res = await api.seedSampleWorkflows();
+      setSeedNotice(
+        `✓ Seeded ${res.count} real workflows: Lead Router, Regional Assigner, Sheet Logger.`
+      );
+      await loadConflicts();
+    } catch (e) {
+      setError(e.message || "Failed to seed sample workflows");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const activeWorkflowCount = workflows.filter((w) => w.status === "active").length;
+
   return (
-    <div className="conflicts-empty">
-      <div className="empty-icon-lg">⟳</div>
-      <h3>No workflow proposed yet</h3>
-      <p>
-        Use the <strong>+ New Workflow</strong> button on the dashboard to
-        describe a workflow. The system will evaluate it against Nexora's
-        existing process architecture and policies — and show you the result here.
-      </p>
-      <button className="btn" onClick={onDashboard}>
-        Go to Dashboard
-      </button>
+    <div className="conflicts-page">
+      <div className="conflicts-header">
+        <div>
+          <h2 className="section-heading">Process Conflict Radar</h2>
+          <p className="section-sub">
+            Real-time field-level conflict detection across {activeWorkflowCount} active workflow{activeWorkflowCount === 1 ? "" : "s"} (0 LLM calls, pure Python).
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            className="btn secondary btn-sm"
+            onClick={handleSeedSamples}
+            disabled={seeding || loading}
+            style={{ fontWeight: 600 }}
+          >
+            {seeding ? <Spinner /> : "⚡ Load Sample Workflows"}
+          </button>
+          <button className="btn ghost btn-sm" onClick={loadConflicts} disabled={loading}>
+            {loading ? <Spinner /> : "⟳ Rescan"}
+          </button>
+        </div>
+      </div>
+
+      {seedNotice && (
+        <div
+          style={{
+            background: "rgba(99, 102, 241, 0.08)",
+            border: "1px solid #c7d2fe",
+            color: "#4338ca",
+            padding: "10px 16px",
+            borderRadius: "6px",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}
+        >
+          {seedNotice}
+        </div>
+      )}
+
+      {error && <ErrorNote message={error} />}
+
+      {loading ? (
+        <div className="conflicts-empty" style={{ padding: "40px 20px" }}>
+          <Spinner />
+          <p style={{ marginTop: 12 }}>Evaluating field paths, trigger loops, and condition intervals...</p>
+        </div>
+      ) : conflicts.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: "48px 24px", border: "1px solid rgba(16, 185, 129, 0.3)", background: "rgba(16, 185, 129, 0.03)" }}>
+          <div style={{ fontSize: "36px", color: "#10b981", marginBottom: 12 }}>✓</div>
+          <h3 style={{ fontSize: "18px", fontWeight: 600, color: "#10b981", margin: "0 0 8px 0" }}>
+            No conflicts found across your {activeWorkflowCount} active workflow{activeWorkflowCount === 1 ? "" : "s"}
+          </h3>
+          <p style={{ color: "#64748b", maxWidth: "540px", margin: "0 auto 24px auto", fontSize: "14px", lineHeight: "1.5" }}>
+            All active automations operate on isolated field paths. Verified 0 infinite trigger loops, 0 write collisions, and 0 unreachable condition paths across production processes.
+          </p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+            <button className="btn" onClick={onDashboard}>
+              Go to Dashboard
+            </button>
+            <button
+              className="btn secondary"
+              onClick={handleSeedSamples}
+              disabled={seeding}
+            >
+              {seeding ? <Spinner /> : "⚡ Load Sample Workflows"}
+            </button>
+            <button className="btn ghost" onClick={() => onNavigate?.("graph")}>
+              View Dependency Graph
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: "#ef4444", display: "flex", alignItems: "center", gap: "8px" }}>
+            <span>⛔ {conflicts.length} Process Conflict{conflicts.length === 1 ? "" : "s"} Detected Across Active Automations</span>
+          </div>
+
+          {conflicts.map((c, idx) => {
+            const isHigh = c.severity === "high";
+            return (
+              <div
+                key={idx}
+                className="card"
+                style={{
+                  borderLeft: `4px solid ${isHigh ? "#ef4444" : "#f59e0b"}`,
+                  padding: "20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        padding: "3px 8px",
+                        borderRadius: "4px",
+                        background: isHigh ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                        color: isHigh ? "#ef4444" : "#d97706",
+                      }}
+                    >
+                      {c.severity} SEVERITY
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        padding: "3px 8px",
+                        borderRadius: "4px",
+                        background: "rgba(100, 116, 139, 0.1)",
+                        color: "#475569",
+                      }}
+                    >
+                      {c.type.replace(/_/g, " ")}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: "12px", color: "#64748b", display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span>Involved:</span>
+                    {c.involved_workflows?.map((w, wi) => (
+                      <span
+                        key={wi}
+                        style={{
+                          background: "#f1f5f9",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          fontWeight: 600,
+                          color: "#334155",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => onNavigate?.("graph", w.id)}
+                        title="View in Dependency Graph"
+                      >
+                        {w.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "14px", fontWeight: 500, color: "#1e293b", lineHeight: "1.5" }}>
+                  {c.message}
+                </div>
+
+
+                {/* Concrete Evidence Box */}
+                {c.evidence && (
+                  <div
+                    style={{
+                      background: "rgba(241, 245, 249, 0.7)",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "6px",
+                      padding: "12px",
+                      fontSize: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, color: "#475569", textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.5px" }}>
+                      Concrete Field-Level Evidence
+                    </div>
+                    {c.evidence.field_paths?.length > 0 && (
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ color: "#64748b" }}>Field paths:</span>
+                        {c.evidence.field_paths.map((f, fi) => (
+                          <code key={fi} style={{ background: "#ffffff", border: "1px solid #cbd5e1", padding: "1px 6px", borderRadius: "3px", color: "#0f172a", fontFamily: "monospace" }}>
+                            {f}
+                          </code>
+                        ))}
+                      </div>
+                    )}
+                    {c.evidence.cycle_path?.length > 0 && (
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ color: "#64748b" }}>Cycle trajectory:</span>
+                        <code style={{ background: "#ffffff", border: "1px solid #cbd5e1", padding: "1px 6px", borderRadius: "3px", color: "#0f172a", fontFamily: "monospace" }}>
+                          {c.evidence.cycle_path.join(" → ")}
+                        </code>
+                      </div>
+                    )}
+                    {c.evidence.step_ids?.length > 0 && (
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ color: "#64748b" }}>Contradicting step IDs:</span>
+                        <span style={{ color: "#334155", fontWeight: 500 }}>
+                          [{c.evidence.step_ids.join(", ")}]
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Conflicts({
@@ -328,7 +565,13 @@ export default function Conflicts({
   };
 
   if (!pending) {
-    return <EmptyState onDashboard={() => onNavigate("dashboard")} />;
+    return (
+      <SystemConflictsView
+        onDashboard={() => onNavigate?.("dashboard")}
+        onNavigate={onNavigate}
+        triggerAiGlow={triggerAiGlow}
+      />
+    );
   }
 
   const { proposal, evaluation, rawText } = pending;
@@ -394,7 +637,17 @@ export default function Conflicts({
 
       {explainError && <ErrorNote message={explainError} />}
 
-      {/* Actions */}
+      {/* SVS Simulation Recommendation Engine */}
+      {proposal?.id && (
+        <SimulationRecommendation
+          workflowId={proposal.id}
+          onSimulate={(wfId) => onNavigate?.("simulation", wfId)}
+          onAdopt={handleAdopt}
+          disabled={actionBusy}
+        />
+      )}
+
+      {/* Fallback & Reject Actions */}
       <div className="conflicts-actions">
         <button
           className="btn danger-outline"
@@ -403,15 +656,6 @@ export default function Conflicts({
         >
           {actionBusy ? <Spinner /> : "✕"} Reject Workflow
         </button>
-        {status !== "conflict" && (
-          <button
-            className="btn success"
-            onClick={handleAdopt}
-            disabled={actionBusy}
-          >
-            {actionBusy ? <Spinner /> : "✓"} Adopt Workflow
-          </button>
-        )}
       </div>
     </div>
   );

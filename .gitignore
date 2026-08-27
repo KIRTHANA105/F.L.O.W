@@ -2,5 +2,7 @@ __pycache__/
 *.pyc
 backend/.env
 backend/flow.db
+backend/llm_cache.db
+*.db
 node_modules/
 frontend/dist/

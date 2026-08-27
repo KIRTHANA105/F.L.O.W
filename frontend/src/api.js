@@ -22,7 +22,8 @@ async function request(path, options = {}) {
 
 export const api = {
   // --- Workflows (Dashboard) ---
-  listWorkflows: () => request("/api/workflows"),
+  listWorkflows: (includeProposed = false) =>
+    request(`/api/workflows${includeProposed ? "?include_proposed=true" : ""}`),
   getWorkflow: (id) => request(`/api/workflows/${id}`),
   deleteWorkflow: (id) => request(`/api/workflows/${id}`, { method: "DELETE" }),
 
@@ -88,7 +89,28 @@ export const api = {
   deletePolicyRule: (ruleId) =>
     request(`/api/policy-rules/${ruleId}`, { method: "DELETE" }),
 
+  // --- Simulation Engine ---
+  simulateWorkflow: (workflowId) =>
+    request(`/api/simulate/${workflowId}`, { method: "POST" }),
+  getLastSimulation: (workflowId) =>
+    request(`/api/simulate/${workflowId}/last`),
+
+  // --- Workflow Dependency Graph ("Workflow X-Ray") ---
+  getGraph: (workflowId) =>
+    request(workflowId ? `/api/graph?workflow_id=${workflowId}` : "/api/graph"),
+
+  // --- Post-Creation SVS Recommendation ---
+  getRecommendation: (workflowId) =>
+    request(`/api/recommendation/${workflowId}`),
+
+  // --- Field-Level Conflicts ---
+  getConflicts: () => request("/api/conflicts"),
+  getWorkflowConflicts: (workflowId) => request(`/api/conflicts/${workflowId}`),
+  seedSampleWorkflows: () =>
+    request("/api/workflows/seed-samples", { method: "POST" }),
+
   // --- Meta / Demo ---
+  getCatalog: () => request("/api/catalog"),
   stats: () => request("/api/stats"),
   demoMode: () => request("/api/demo-mode"),
   setDemoMode: (enabled) =>

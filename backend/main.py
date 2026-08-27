@@ -19,6 +19,11 @@ from pydantic import BaseModel
 import db
 import engine
 import llm
+import catalog
+import simulation
+import graph
+import recommendation
+import conflict_detector
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -76,6 +81,7 @@ def set_demo_mode(req: DemoModeRequest):
 @app.post("/api/reset")
 def reset_demo():
     seeded = db.init_db(force_reseed=True)
+    graph.invalidate_graph_cache()
     for key in STATS:
         STATS[key] = 0
     return {"reseeded": seeded}
@@ -83,8 +89,8 @@ def reset_demo():
 
 # --- Workflows (Dashboard + detail modal) -----------------------------------
 @app.get("/api/workflows")
-def list_workflows():
-    workflows = db.list_workflows()
+def list_workflows(include_proposed: bool = False):
+    workflows = db.list_workflows(include_proposed=include_proposed)
     for wf in workflows:
         wf["step_count"] = len(wf["steps"])
     return {"workflows": workflows}
@@ -105,6 +111,7 @@ def get_workflow(workflow_id: int):
 def delete_workflow(workflow_id: int):
     if not db.delete_workflow(workflow_id):
         raise HTTPException(status_code=404, detail="No such workflow.")
+    graph.invalidate_graph_cache()
     return {"deleted": workflow_id}
 
 
@@ -174,6 +181,7 @@ def analyze_workflow(req: AnalyzeRequest):
 
     STATS["llm_calls"] += 1
     saved = db.insert_workflow(parsed, status="proposed", is_proposed=True)
+    graph.invalidate_graph_cache()
     return {"proposal": saved, "raw_text": text}
 
 
@@ -275,6 +283,7 @@ def adopt_proposal(proposal_id: int, req: AdoptRequest):
             req.origin_workflow_id, proposal_id, "precedes", "Adopted after conflict review"
         )
 
+    graph.invalidate_graph_cache()
     return {"workflow": db.get_workflow(proposal_id)}
 
 
@@ -282,6 +291,7 @@ def adopt_proposal(proposal_id: int, req: AdoptRequest):
 def reject_proposal(proposal_id: int):
     if not db.delete_workflow(proposal_id):
         raise HTTPException(status_code=404, detail="No such proposal.")
+    graph.invalidate_graph_cache()
     return {"rejected": proposal_id}
 
 
@@ -441,3 +451,121 @@ def delete_policy_rule(rule_id: int):
     if not db.delete_policy_rule(rule_id):
         raise HTTPException(status_code=404, detail="No such policy rule.")
     return {"deleted": rule_id}
+
+
+# --- Connector Catalog --------------------------------------------------------
+@app.get("/api/catalog")
+def get_catalog():
+    return catalog.get_catalog()
+
+
+# --- Simulation Engine --------------------------------------------------------
+@app.post("/api/simulate/{workflow_id}")
+def run_workflow_simulation(workflow_id: int):
+    wf = db.get_workflow(workflow_id)
+    if wf is None:
+        raise HTTPException(status_code=404, detail="No such workflow.")
+    report = simulation.run_simulation(wf)
+    return report
+
+
+@app.get("/api/simulate/{workflow_id}/last")
+def get_last_simulation(workflow_id: int):
+    report = simulation.get_last_simulation_report(workflow_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="No simulation report found for this workflow.")
+    return report
+
+
+# --- Workflow Dependency Graph ("Workflow X-Ray") ----------------------------
+@app.get("/api/graph")
+def get_workflow_dependency_graph(workflow_id: int | None = None):
+    return graph.build_dependency_graph(focused_workflow_id=workflow_id)
+
+
+# --- Post-Creation SVS Recommendation ----------------------------------------
+@app.get("/api/recommendation/{workflow_id}")
+def get_workflow_recommendation(workflow_id: int):
+    return recommendation.compute_recommendation(workflow_id)
+
+
+# --- Field-Level Conflict Detection ------------------------------------------
+@app.get("/api/conflicts")
+def get_conflicts():
+    workflows = db.list_workflows(include_proposed=True)
+    findings = conflict_detector.detect_all_conflicts(workflows)
+    return {"conflicts": findings, "count": len(findings)}
+
+
+@app.get("/api/conflicts/{workflow_id}")
+def get_workflow_conflicts(workflow_id: int):
+    workflows = db.list_workflows(include_proposed=True)
+    all_conflicts = conflict_detector.detect_all_conflicts(workflows)
+    wf_id_str = str(workflow_id)
+    matching = [
+        c for c in all_conflicts
+        if any(str(w.get("id")) == wf_id_str or str(w.get("id")) == f"wf_{wf_id_str}"
+               for w in c.get("involved_workflows", []))
+    ]
+    return {"conflicts": matching, "count": len(matching)}
+
+
+@app.post("/api/workflows/seed-samples")
+def seed_sample_workflows():
+    sample_a = {
+        "name": "Lead Router",
+        "department": "Sales",
+        "description": "Routes inbound form submissions to account reps in HubSpot.",
+        "steps": [
+            {"name": "Form Submitted", "trigger_id": "form.submitted"},
+            {"name": "Assign Contact Owner", "operation_id": "hubspot.assign_owner"},
+        ],
+        "business_rules": [],
+        "status": "active",
+        "is_proposed": False,
+    }
+    sample_b = {
+        "name": "Regional Assigner",
+        "department": "Sales",
+        "description": "Re-assigns contact ownership when contact update event occurs.",
+        "steps": [
+            {"name": "Contact Updated", "trigger_id": "hubspot.contact_updated"},
+            {"name": "Update Contact Record", "operation_id": "hubspot.update_contact"},
+        ],
+        "business_rules": [],
+        "status": "active",
+        "is_proposed": False,
+    }
+    sample_c = {
+        "name": "Sheet Logger",
+        "department": "Operations",
+        "description": "Logs form submissions into Google Sheets for audit.",
+        "steps": [
+            {"name": "Form Submitted", "trigger_id": "form.submitted"},
+            {"name": "Append Row to Sheet", "operation_id": "sheets.append_row"},
+        ],
+        "business_rules": [],
+        "status": "active",
+        "is_proposed": False,
+    }
+
+    # Idempotent: remove previous sample workflows if they exist
+    existing = db.list_workflows(include_proposed=True)
+    sample_names = {"Lead Router", "Regional Assigner", "Sheet Logger"}
+    for wf in existing:
+        if wf.get("name") in sample_names:
+            db.delete_workflow(wf["id"])
+
+    saved_a = db.insert_workflow(sample_a, status="active", is_proposed=False)
+    saved_b = db.insert_workflow(sample_b, status="active", is_proposed=False)
+    saved_c = db.insert_workflow(sample_c, status="active", is_proposed=False)
+    graph.invalidate_graph_cache()
+
+    return {
+        "seeded": [saved_a, saved_b, saved_c],
+        "count": 3,
+        "message": "Sample workflows created successfully through standard pipeline."
+    }
+
+
+

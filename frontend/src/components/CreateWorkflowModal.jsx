@@ -2,23 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { Spinner, ErrorNote } from "./Shared";
 
-const CONFLICT_EXAMPLE =
-  "When an enterprise deal is closed, automatically start customer onboarding immediately and schedule the implementation kickoff.";
-
-const COMPATIBLE_EXAMPLE =
-  "After Finance Verification is completed for an enterprise customer, automatically notify Customer Success and create the onboarding workspace.";
-
-const EXAMPLES = [
-  { label: "Demo: conflict scenario", text: CONFLICT_EXAMPLE },
-  { label: "Demo: compatible scenario", text: COMPATIBLE_EXAMPLE },
-];
-
-/**
- * Modal for creating a new workflow from natural language.
- * Calls /api/analyze then /api/evaluate and navigates to the Conflicts page.
- */
-export default function CreateWorkflowModal({ onClose, onResult, triggerAiGlow }) {
-  const [text, setText] = useState("");
+export default function CreateWorkflowModal({
+  onClose,
+  onResult,
+  triggerAiGlow,
+  initialText = "",
+}) {
+  const [text, setText] = useState(initialText || "");
   const [step, setStep] = useState("idle"); // idle | analyzing | evaluating | done
   const [error, setError] = useState("");
   const backdropRef = useRef(null);
@@ -45,7 +35,7 @@ export default function CreateWorkflowModal({ onClose, onResult, triggerAiGlow }
       setStep("evaluating");
       const evalResult = await api.evaluate(proposal.id);
 
-      // Pass everything to parent → navigate to Conflicts
+      // Pass everything to parent → navigate to Decision Gate
       onResult({
         proposal,
         evaluation: evalResult,
@@ -73,8 +63,8 @@ export default function CreateWorkflowModal({ onClose, onResult, triggerAiGlow }
           <div>
             <h2 className="modal-title">Describe a new workflow</h2>
             <p className="modal-desc">
-              Write it the way you'd say it. The system will evaluate it
-              against Nexora's existing process architecture and policies.
+              Write it in natural language. FLOW will compile it into structured steps,
+              check for field collisions, and evaluate it against process memory.
             </p>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="Close">
@@ -91,26 +81,60 @@ export default function CreateWorkflowModal({ onClose, onResult, triggerAiGlow }
             rows={5}
             value={text}
             disabled={step !== "idle"}
-            placeholder="e.g. When an enterprise deal is closed, automatically start customer onboarding and schedule the implementation kickoff…"
+            placeholder="e.g. When a form is submitted, lookup the contact in HubSpot and update the lifecycle stage…"
             onChange={(e) => setText(e.target.value)}
             autoFocus
           />
 
-          <div className="examples" style={{ marginTop: 12 }}>
-            {EXAMPLES.map((ex) => (
+          <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Quick Demo Templates
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
-                key={ex.label}
+                type="button"
                 className="chip"
                 disabled={step !== "idle"}
-                onClick={() => setText(ex.text)}
+                onClick={() =>
+                  setText(
+                    "When a contact is updated in HubSpot, automatically update the contact owner in HubSpot to re-assign regional territory."
+                  )
+                }
+                style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: "12px" }}
               >
-                {ex.label}
+                ⛔ Demo: Conflicting Workflow (HubSpot Loop)
               </button>
-            ))}
+              <button
+                type="button"
+                className="chip"
+                disabled={step !== "idle"}
+                onClick={() =>
+                  setText(
+                    "Every morning on a schedule, read customer rows from Google Sheets for daily status review."
+                  )
+                }
+                style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", fontSize: "12px" }}
+              >
+                ✓ Demo: Compatible Direct Workflow (Read-Only)
+              </button>
+              <button
+                type="button"
+                className="chip"
+                disabled={step !== "idle"}
+                onClick={() =>
+                  setText(
+                    "When a user submits a lead form, append the row into Google Sheets."
+                  )
+                }
+                style={{ background: "#f8fafc", color: "#334155", border: "1px solid #e2e8f0", fontSize: "12px" }}
+              >
+                ⚙ Demo: Standard Workflow (Google Sheets)
+              </button>
+            </div>
           </div>
 
           {step !== "idle" && (
-            <div className="analyze-progress">
+            <div className="analyze-progress" style={{ marginTop: 12 }}>
               <Spinner />
               <span>{stepMessages[step] || "Processing…"}</span>
             </div>

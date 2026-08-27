@@ -115,6 +115,10 @@ def client():
     if _client is None:
         key = os.environ.get("GEMINI_API_KEY")
         if not key:
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
+            key = os.environ.get("GEMINI_API_KEY")
+        if not key:
             raise LLMError("GEMINI_API_KEY is not set. Add it to backend/.env and restart.")
         _client = genai.Client(api_key=key)
     return _client
