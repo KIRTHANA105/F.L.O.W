@@ -1,0 +1,14 @@
+[
+  { "customer_id": "CUS-3001", "status": "new",      "hours_since_update": 3,   "amount": 145000, "customer": "Anand Retail Group",  "warehouse": "CHN-01" },
+  { "customer_id": "CUS-3002", "status": "new",      "hours_since_update": 11,  "amount": 32000,  "customer": "Priya Boutique",      "warehouse": "BLR-02" },
+  { "customer_id": "CUS-3003", "status": "new",      "hours_since_update": 6,   "amount": 210000, "customer": "Velan Enterprises",   "warehouse": "HYD-03" },
+  { "customer_id": "CUS-3004", "status": "active",   "hours_since_update": 240, "amount": 88000,  "customer": "Kumar Textiles",      "warehouse": "CHN-01" },
+  { "customer_id": "CUS-3005", "status": "new",      "hours_since_update": 20,  "amount": 9500,   "customer": "Meena Handlooms",     "warehouse": "BLR-02" },
+  { "customer_id": "CUS-3006", "status": "new",      "hours_since_update": 1,   "amount": 176000, "customer": "Sundaram Exports",    "warehouse": "HYD-03" },
+  { "customer_id": "CUS-3007", "status": "churned",  "hours_since_update": 900, "amount": 12000,  "customer": "Old Mill Supplies",   "warehouse": "CHN-01" },
+  { "customer_id": "CUS-3008", "status": "new",      "hours_since_update": 48,  "amount": 64000,  "customer": "Rajesh Fabrics",      "warehouse": "BLR-02" },
+  { "customer_id": "CUS-3009", "status": "active",   "hours_since_update": 72,  "amount": 133000, "customer": "Nila Garments",       "warehouse": "HYD-03" },
+  { "customer_id": "CUS-3010", "status": "new",      "hours_since_update": 15,  "amount": 27000,  "customer": "Chithra Stores",      "warehouse": "CHN-01" },
+  { "customer_id": "CUS-3011", "status": "new",      "hours_since_update": 30,  "amount": 98000,  "customer": "Bharath Wholesale",   "warehouse": "BLR-02" },
+  { "customer_id": "CUS-3012", "status": "new",      "hours_since_update": 8,   "amount": 51000,  "customer": "Ravi Trading Co",     "warehouse": "HYD-03" }
+]

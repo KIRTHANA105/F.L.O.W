@@ -77,6 +77,47 @@ function StatsBar({ stats }) {
   );
 }
 
+/**
+ * Demo insurance: serves recorded responses instead of calling the API.
+ * The free tier allows 20 LLM requests/day/model, so this is what keeps the
+ * demo alive on a spent quota or dead venue wifi.
+ */
+function SafetyToggle() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.demoMode().then(setState).catch(() => setState(null));
+  }, []);
+
+  if (!state) return null;
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      setState(await api.setDemoMode(!state.safety_mode));
+    } catch {
+      /* leave the last known state on screen */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      className={`safety-toggle ${state.safety_mode ? "on" : ""}`}
+      onClick={toggle}
+      disabled={busy}
+      title={`${state.cache.total} recorded response(s) available offline`}
+    >
+      <span className="safety-dot" />
+      Safety Mode {state.safety_mode ? "ON" : "OFF"}
+      <span style={{ opacity: 0.7 }}>· {state.cache.total} cached</span>
+    </button>
+  );
+}
+
+
 export default function Dashboard({
   workflows,
   stats,
@@ -96,9 +137,12 @@ export default function Dashboard({
               Every rule currently live across your connected systems.
             </p>
           </div>
-          <button className="btn ghost" onClick={onRefresh}>
-            ↻ Refresh
-          </button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <SafetyToggle />
+            <button className="btn ghost" onClick={onRefresh}>
+              ↻ Refresh
+            </button>
+          </div>
         </div>
 
         {justDeployed && (

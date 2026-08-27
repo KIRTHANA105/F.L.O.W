@@ -1,0 +1,8 @@
+[
+  { "employee_id": "EMP-4001", "status": "active", "hours_since_update": 2,  "amount": 0, "employment_type": "full_time",  "customer": "Arjun Prakash" },
+  { "employee_id": "EMP-4002", "status": "active", "hours_since_update": 5,  "amount": 0, "employment_type": "contractor", "customer": "Divya Menon" },
+  { "employee_id": "EMP-4003", "status": "active", "hours_since_update": 26, "amount": 0, "employment_type": "full_time",  "customer": "Karthik Iyer" },
+  { "employee_id": "EMP-4004", "status": "pending","hours_since_update": 50, "amount": 0, "employment_type": "full_time",  "customer": "Sneha Raman" },
+  { "employee_id": "EMP-4005", "status": "active", "hours_since_update": 9,  "amount": 0, "employment_type": "contractor", "customer": "Vikram Das" },
+  { "employee_id": "EMP-4006", "status": "active", "hours_since_update": 70, "amount": 0, "employment_type": "full_time",  "customer": "Lakshmi Nair" }
+]

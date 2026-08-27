@@ -3,12 +3,16 @@ import { api } from "./api";
 import Dashboard from "./components/Dashboard";
 import CreateWorkflow from "./components/CreateWorkflow";
 import Conflicts from "./components/Conflicts";
+import Explorer from "./components/Explorer";
+import Policies from "./components/Policies";
 import Auth from "./pages/Auth";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
   { id: "create", label: "Create Workflow" },
   { id: "conflicts", label: "Conflicts" },
+  { id: "memory", label: "Process Memory" },
+  { id: "policies", label: "Policies" },
 ];
 
 export default function App() {
@@ -46,10 +50,6 @@ export default function App() {
     setTimeout(() => setWelcome(""), 4000);
   };
 
-  if (!isAuthenticated) {
-    return <Auth onSuccess={handleAuthSuccess} triggerAiGlow={triggerAiGlow} />;
-  }
-
   const refresh = useCallback(async () => {
     try {
       const [wf, st] = await Promise.all([api.listWorkflows(), api.stats()]);
@@ -62,8 +62,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (isAuthenticated) {
+      refresh();
+    }
+  }, [isAuthenticated, refresh]);
+
+  if (!isAuthenticated) {
+    return <Auth onSuccess={handleAuthSuccess} triggerAiGlow={triggerAiGlow} />;
+  }
 
   const handleDeployed = async (wf) => {
     await refresh();
@@ -141,6 +147,10 @@ export default function App() {
           triggerAiGlow={triggerAiGlow}
         />
       )}
+
+      {tab === "memory" && <Explorer />}
+
+      {tab === "policies" && <Policies triggerAiGlow={triggerAiGlow} />}
 
       {tab === "conflicts" && (
         <Conflicts

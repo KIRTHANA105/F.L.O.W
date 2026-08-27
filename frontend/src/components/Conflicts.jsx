@@ -2,6 +2,38 @@ import { useState } from "react";
 import { api } from "../api";
 import { SourceBadge, Spinner, ErrorNote, summarize } from "./Shared";
 
+/**
+ * Spec rule: the user never sees JSON. The resolver returns conditions as a
+ * JSON string, so turn it into the same plain phrasing used everywhere else.
+ */
+function humanizeValue(value) {
+  if (value == null) return "-";
+  let parsed = value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        return trimmed;
+      }
+    } else {
+      return trimmed;
+    }
+  }
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  const parts = list
+    .map((c) => {
+      if (c && typeof c === "object") {
+        if (c.display) return c.display;
+        if (c.field) return `${c.field} ${c.operator ?? ""} ${c.value ?? ""}`.trim();
+      }
+      return String(c);
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join(" and ") : String(value);
+}
+
 function RuleSide({ rule, stance }) {
   return (
     <div className="rule-side">
@@ -157,8 +189,19 @@ function ConflictCard({ conflict, triggerAiGlow }) {
           <div className="suggestion-title">Suggested resolution</div>
           <p>{suggestion.explanation}</p>
           <div className="suggestion-change">
-            <strong>Proposed change:</strong> {suggestion.fix.field}:{" "}
-            {suggestion.fix.current_value} → {suggestion.fix.suggested_value}
+            <strong>Proposed change</strong>
+            <div className="change-line">
+              <span className="change-from">
+                {humanizeValue(suggestion.fix.current_value)}
+              </span>
+              <span className="change-arrow">→</span>
+              <span className="change-to">
+                {humanizeValue(suggestion.fix.suggested_value)}
+              </span>
+            </div>
+            {suggestion.fix.reason && (
+              <div className="change-reason">{suggestion.fix.reason}</div>
+            )}
           </div>
           <div className="suggestion-actions">
             <button

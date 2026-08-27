@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { SourceBadge, PriorityBadge, Spinner, ErrorNote } from "./Shared";
+import MemoryMatch from "./MemoryMatch";
+import PolicyCheck from "./PolicyCheck";
 
 const DEMO_RULE =
   "If order stays in packed status for more than 48 hours, alert warehouse and flag on dashboard";
@@ -130,6 +132,8 @@ export default function CreateWorkflow({
   const [text, setText] = useState(DEMO_RULE);
   const [source, setSource] = useState("ERPNext");
   const [parsed, setParsed] = useState(null);
+  const [memoryMatch, setMemoryMatch] = useState(null);
+  const [policyCheck, setPolicyCheck] = useState(null);
   const [sim, setSim] = useState(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -143,6 +147,8 @@ export default function CreateWorkflow({
 
   const reset = () => {
     setParsed(null);
+    setMemoryMatch(null);
+    setPolicyCheck(null);
     setSim(null);
     setError("");
   };
@@ -155,6 +161,8 @@ export default function CreateWorkflow({
     try {
       const data = await api.parse(text, source);
       setParsed(data.workflow);
+      setMemoryMatch(data.memory_match || null);
+      setPolicyCheck(data.policy_check || null);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -332,6 +340,10 @@ export default function CreateWorkflow({
           </div>
         </div>
       )}
+
+      {memoryMatch && <MemoryMatch match={memoryMatch} />}
+
+      {policyCheck && <PolicyCheck check={policyCheck} />}
 
       {sim && <SimulationResults sim={sim} />}
     </div>

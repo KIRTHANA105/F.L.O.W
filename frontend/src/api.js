@@ -1,4 +1,6 @@
-const BASE = "http://127.0.0.1:8000";
+// Port 8000 can be held by a stale socket on Windows; override with
+// VITE_API_BASE (e.g. VITE_API_BASE=http://127.0.0.1:8010) without a code change.
+const BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8010";
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
@@ -51,6 +53,22 @@ export const api = {
     request("/api/apply-fix", {
       method: "POST",
       body: JSON.stringify({ fix }),
+    }),
+  memory: () => request("/api/memory"),
+  policies: () => request("/api/policies"),
+  createPolicy: (text) =>
+    request("/api/policies", { method: "POST", body: JSON.stringify({ text }) }),
+  togglePolicy: (id, active) =>
+    request(`/api/policies/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active }),
+    }),
+  deletePolicy: (id) => request(`/api/policies/${id}`, { method: "DELETE" }),
+  demoMode: () => request("/api/demo-mode"),
+  setDemoMode: (enabled) =>
+    request("/api/demo-mode", {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
     }),
   stats: () => request("/api/stats"),
   healthScore: () => request("/api/health-score"),
