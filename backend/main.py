@@ -486,6 +486,13 @@ def run_workflow_simulation(workflow_id: int):
     wf = db.get_workflow(workflow_id)
     if wf is None:
         raise HTTPException(status_code=404, detail="No such workflow.")
+    
+    # Mark workflow as in_progress
+    conn = db.connect()
+    conn.execute("UPDATE workflows SET status='in_progress' WHERE id=?", (workflow_id,))
+    conn.commit()
+    conn.close()
+
     report = simulation.run_simulation(wf)
     
     # If simulation found issues or faults, mark workflow as needing review
@@ -493,6 +500,8 @@ def run_workflow_simulation(workflow_id: int):
     conn = db.connect()
     if failed > 0:
         conn.execute("UPDATE workflows SET status='review' WHERE id=?", (workflow_id,))
+    else:
+        conn.execute("UPDATE workflows SET status='in_progress' WHERE id=?", (workflow_id,))
     conn.commit()
     conn.close()
     
