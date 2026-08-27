@@ -1,21 +1,19 @@
 :root {
-  --bg: #0b1020;
-  --panel: #141b2f;
-  --panel-2: #1b2540;
-  --line: #27324f;
-  --text: #e8ecf7;
-  --muted: #93a0bd;
-  --accent: #5b8cff;
-  --green: #2fd67d;
-  --green-dim: rgba(47, 214, 125, 0.14);
-  --red: #ff5c72;
-  --red-dim: rgba(255, 92, 114, 0.14);
-  --amber: #ffb547;
-  --erp: #3b82f6;
-  --zoho: #f97316;
-  --internal: #8a93a8;
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f7f8fa;
+  --line: #e5e7eb;
+  --text: #111827;
+  --muted: #6b7280;
+  --accent: #dc2626;
+  --accent-hover: #b91c1c;
+  --green: #16a34a;
+  --green-dim: #f0fdf4;
+  --red: #dc2626;
+  --red-dim: #fef2f2;
+  --amber: #854d0e;
 
-  color-scheme: dark;
+  color-scheme: light;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
@@ -25,7 +23,7 @@
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 700px at 12% -10%, #172247 0%, var(--bg) 55%);
+  background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -51,12 +49,19 @@ button:disabled {
 
 /* ---------- Layout ---------- */
 .app {
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 28px 24px 80px;
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid var(--line);
+  margin: -28px -24px 28px;
+  padding: 16px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -74,20 +79,20 @@ button:disabled {
 .logo {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(140deg, var(--accent), #9d6bff);
+  border-radius: 6px;
+  background: var(--accent);
   display: grid;
   place-items: center;
   font-weight: 800;
   font-size: 19px;
   letter-spacing: -0.5px;
-  box-shadow: 0 6px 22px rgba(91, 140, 255, 0.4);
+  box-shadow: none;
 }
 
 .brand h1 {
   margin: 0;
   font-size: 23px;
-  letter-spacing: 5px;
+  letter-spacing: -0.02em;
   font-weight: 700;
 }
 
@@ -100,29 +105,40 @@ button:disabled {
 
 .tabs {
   display: flex;
-  gap: 8px;
-  background: var(--panel);
-  padding: 6px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
+  gap: 24px;
+  background: transparent;
+  padding: 0;
 }
 
 .tab {
   background: transparent;
   color: var(--muted);
-  padding: 10px 18px;
+  padding: 14px 2px 12px;
   font-size: 14px;
-  border-radius: 10px;
+  border-radius: 0;
+  position: relative;
 }
 
 .tab:hover:not(.active) {
   color: var(--text);
-  background: var(--panel-2);
+  background: transparent;
+  color: var(--text);
 }
 
 .tab.active {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
   background: var(--accent);
-  color: #08122e;
 }
 
 .tab .badge-count {
@@ -140,8 +156,9 @@ button:disabled {
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 22px;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   margin-bottom: 18px;
 }
 
@@ -221,11 +238,11 @@ textarea::placeholder {
   padding: 13px 24px;
   font-size: 14.5px;
   background: var(--accent);
-  color: #08122e;
+  color: #ffffff;
 }
 
 .btn:hover:not(:disabled) {
-  filter: brightness(1.12);
+  background: var(--accent-hover);
 }
 
 .btn.secondary {
@@ -236,19 +253,19 @@ textarea::placeholder {
 
 .btn.success {
   background: var(--green);
-  color: #04231a;
+  color: #ffffff;
 }
 
 .btn.danger {
   background: var(--red);
-  color: #2b0009;
+  color: #ffffff;
 }
 
 .btn.ghost {
   background: transparent;
   border: 1px solid var(--line);
   color: var(--muted);
-  padding: 9px 16px;
+  padding: 8px 12px;
   font-size: 13px;
 }
 
@@ -270,7 +287,7 @@ textarea::placeholder {
   color: var(--muted);
   font-size: 12.5px;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
 }
 
 .chip:hover {

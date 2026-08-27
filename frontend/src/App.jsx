@@ -71,7 +71,7 @@ export default function App() {
           <div className="logo">F</div>
           <div>
             <h1>FLOW</h1>
-            <p>AI-Powered Business Automation Copilot</p>
+            <p>Rule Intelligence · Copilot</p>
           </div>
         </div>
 

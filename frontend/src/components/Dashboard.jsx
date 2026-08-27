@@ -5,19 +5,19 @@ function StatsBar({ stats }) {
   return (
     <div className="stats-bar">
       <div className="stat llm">
-        <div className="n">{stats.llm_calls}</div>
+              <div className="stat-number"><span className="stat-accent" />{stats.llm_calls}</div>
         <div className="l">LLM calls this session</div>
       </div>
       <div className="stat free">
-        <div className="n">{stats.rules_evaluated}</div>
+              <div className="stat-number"><span className="stat-accent" />{stats.rules_evaluated}</div>
         <div className="l">Rules evaluated · 0 LLM</div>
       </div>
       <div className="stat free">
-        <div className="n">{stats.pairs_compared}</div>
+              <div className="stat-number"><span className="stat-accent" />{stats.pairs_compared}</div>
         <div className="l">Conflict pairs · 0 LLM</div>
       </div>
       <div className="stat">
-        <div className="n">{stats.conflict_llm_calls}</div>
+              <div className="stat-number"><span className="stat-accent" />{stats.conflict_llm_calls}</div>
         <div className="l">Explanations generated</div>
       </div>
     </div>
@@ -32,7 +32,7 @@ export default function Dashboard({ workflows, stats, onRefresh, onDelete, justD
       <div className="card">
         <div className="section-title">
           <div>
-            <h2>Active workflows</h2>
+            <h2>Active Rules</h2>
             <p className="sub" style={{ marginBottom: 0 }}>
               Every rule currently live across your connected systems.
             </p>
@@ -82,11 +82,11 @@ export default function Dashboard({ workflows, stats, onRefresh, onDelete, justD
                       <PriorityBadge priority={w.priority} />
                     </td>
                     <td>
-                      <span className="badge status-active">● ACTIVE</span>
+                      <span className="status-active"><span className="status-dot" />Active</span>
                     </td>
                     <td>
                       <button
-                        className="btn ghost"
+                        className="remove-button"
                         title="Remove workflow"
                         onClick={() => onDelete(w.id)}
                       >
