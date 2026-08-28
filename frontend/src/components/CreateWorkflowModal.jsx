@@ -86,9 +86,9 @@ export default function CreateWorkflowModal({
             autoFocus
           />
 
-          <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
-            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-              Quick Demo Templates
+          <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Quick Demo Templates (Click to Populate)
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
@@ -100,35 +100,70 @@ export default function CreateWorkflowModal({
                     "When a contact is updated in HubSpot, automatically update the contact owner in HubSpot to re-assign regional territory."
                   )
                 }
-                style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: "12px" }}
+                style={{ background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "8px", cursor: "pointer" }}
+                title="Triggers static conflict detection & infinite cycle loop warning"
               >
-                ⛔ Demo: Conflicting Workflow (HubSpot Loop)
+                ⛔ Demo: Cyclic Conflict (HubSpot Contact Loop)
               </button>
+
               <button
                 type="button"
                 className="chip"
                 disabled={step !== "idle"}
                 onClick={() =>
                   setText(
-                    "Every morning on a schedule, read customer rows from Google Sheets for daily status review."
+                    "When a new lead form is submitted, send a formatted notification message to the #sales-alerts Slack channel."
                   )
                 }
-                style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", fontSize: "12px" }}
+                style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "8px", cursor: "pointer" }}
+                title="Safe read/notify flow that passes straight to direct execution"
               >
-                ✓ Demo: Compatible Direct Workflow (Read-Only)
+                ✓ Demo: Direct Activation (Slack Lead Alert)
               </button>
+
               <button
                 type="button"
                 className="chip"
                 disabled={step !== "idle"}
                 onClick={() =>
                   setText(
-                    "When a user submits a lead form, append the row into Google Sheets."
+                    "When a payment refund is initiated in Stripe, verify charge status, create a credit memo in QuickBooks, and send an email receipt to the customer."
                   )
                 }
-                style={{ background: "#f8fafc", color: "#334155", border: "1px solid #e2e8f0", fontSize: "12px" }}
+                style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "8px", cursor: "pointer" }}
+                title="Multi-step financial automation requiring simulation verification"
               >
-                ⚙ Demo: Standard Workflow (Google Sheets)
+                ⚡ Demo: Financial Flow (Stripe Refund & Invoice)
+              </button>
+
+              <button
+                type="button"
+                className="chip"
+                disabled={step !== "idle"}
+                onClick={() =>
+                  setText(
+                    "When an employee requests AWS access in Jira Service Management, check manager approval, create Okta temporary assignment, and log audit event to Datadog."
+                  )
+                }
+                style={{ background: "#faf5ff", color: "#6b21a8", border: "1px solid #e9d5ff", fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "8px", cursor: "pointer" }}
+                title="Human-in-the-loop security access provisioning"
+              >
+                🛡 Demo: Enterprise Security (Jira Access Provisioning)
+              </button>
+
+              <button
+                type="button"
+                className="chip"
+                disabled={step !== "idle"}
+                onClick={() =>
+                  setText(
+                    "Every morning at 8:00 AM, extract active customer rows from Google Sheets, validate data schema, and sync records into the PostgreSQL analytics database."
+                  )
+                }
+                style={{ background: "#f8fafc", color: "#334155", border: "1px solid #e2e8f0", fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "8px", cursor: "pointer" }}
+                title="Scheduled batch ingestion pipeline"
+              >
+                ⏱ Demo: Daily Sync (Sheets to PostgreSQL)
               </button>
             </div>
           </div>
