@@ -96,15 +96,6 @@ export default function Simulation({
     }
   };
 
-  // Auto-run simulation when initialWorkflowId is set
-  const autoRunRef = useRef(false);
-  useEffect(() => {
-    if (initialWorkflowId && !autoRunRef.current) {
-      autoRunRef.current = true;
-      handleRunSimulation(initialWorkflowId);
-    }
-  }, [initialWorkflowId]);
-
   const selectedWorkflow =
     workflows.find((w) => w.id === selectedWfId) ||
     (decisionPending?.proposal?.id === selectedWfId ? decisionPending.proposal : null) ||

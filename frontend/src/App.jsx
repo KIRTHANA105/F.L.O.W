@@ -38,9 +38,16 @@ export default function App() {
     glowTimer.current = setTimeout(() => setAiActive(false), durationMs);
   }, []);
 
-  const handleNavigateToSimulation = (wfId) => {
-    if (wfId) setSimWorkflowId(wfId);
-    refresh();
+  const handleNavigateToSimulation = async (wfId) => {
+    if (wfId) {
+      setSimWorkflowId(wfId);
+      try {
+        await api.updateWorkflowStatus(wfId, "in_progress");
+      } catch (err) {
+        console.error("Failed to update status to in_progress", err);
+      }
+    }
+    await refresh();
     setTab("simulation");
   };
 
