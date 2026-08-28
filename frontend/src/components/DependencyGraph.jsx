@@ -307,12 +307,12 @@ export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow 
         label: (e.fields || []).join(", "),
         labelStyle: {
           fontSize: 10,
-          fill: isDimmed ? "rgba(255,255,255,0.2)" : "#cbd5e1",
+          fill: isDimmed ? "rgba(0,0,0,0.15)" : "#334155",
           fontWeight: 600,
         },
         labelBgStyle: {
-          fill: isDimmed ? "transparent" : "#0f172a",
-          fillOpacity: 0.85,
+          fill: isDimmed ? "transparent" : "#ffffff",
+          fillOpacity: 0.95,
           rx: 4,
           ry: 4,
         },
@@ -529,12 +529,12 @@ export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow 
               maxZoom={1.5}
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="#1e293b" gap={18} size={1} />
+              <Background color="#cbd5e1" gap={18} size={1} />
               <Controls showInteractive={false} className="xray-flow-controls" />
               <MiniMap
-                nodeStrokeColor="#38bdf8"
-                nodeColor="#1e293b"
-                maskColor="rgba(15, 23, 42, 0.7)"
+                nodeStrokeColor="#6366f1"
+                nodeColor="#e2e8f0"
+                maskColor="rgba(241, 245, 249, 0.75)"
                 className="xray-minimap"
               />
             </ReactFlow>

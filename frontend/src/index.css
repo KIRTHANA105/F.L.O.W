@@ -3148,7 +3148,7 @@ label.field {
 .xray-canvas {
   flex: 1;
   height: 560px;
-  background: #0b0f19;
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 16px;
   position: relative;
@@ -3168,16 +3168,16 @@ label.field {
 }
 
 .xray-flow-controls {
-  background: var(--panel) !important;
-  border: 1px solid var(--line) !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
 }
 
 .xray-flow-controls button {
-  background: transparent !important;
-  border-bottom: 1px solid var(--line) !important;
-  color: var(--text) !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 .xray-flow-controls button:last-child {
@@ -3185,8 +3185,8 @@ label.field {
 }
 
 .xray-minimap {
-  background: #0f172a !important;
-  border: 1px solid var(--line) !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
 }
 
@@ -3194,12 +3194,12 @@ label.field {
 .xray-node {
   width: 190px;
   height: 74px;
-  background: #0f172a;
+  background: #ffffff;
   border-radius: 10px;
   display: flex;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
@@ -3207,11 +3207,11 @@ label.field {
 
 .xray-node:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
 }
 
 .node-border-default {
-  border: 1px solid var(--line);
+  border: 1px solid #cbd5e1;
 }
 
 .node-border-warning {
@@ -3220,21 +3220,21 @@ label.field {
 
 .node-border-cycle {
   border: 2px solid #ef4444;
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
   animation: nodeCyclePulse 2s infinite ease-in-out;
 }
 
 @keyframes nodeCyclePulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
-  50% { box-shadow: 0 0 22px rgba(239, 68, 68, 0.8); }
+  0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+  50% { box-shadow: 0 0 22px rgba(239, 68, 68, 0.5); }
 }
 
 .node-draft {
-  opacity: 0.4;
+  opacity: 0.5;
 }
 
 .node-dimmed {
-  opacity: 0.15 !important;
+  opacity: 0.2 !important;
 }
 
 .node-highlighted {
@@ -3268,7 +3268,7 @@ label.field {
 .xray-node-title {
   font-size: 12.5px;
   font-weight: 700;
-  color: #f8fafc;
+  color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3282,13 +3282,13 @@ label.field {
   flex-shrink: 0;
 }
 
-.tier-shallow { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.tier-standard { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
-.tier-deep { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+.tier-shallow { background: #dcfce7; color: #166534; }
+.tier-standard { background: #e0e7ff; color: #4338ca; }
+.tier-deep { background: #fee2e2; color: #991b1b; }
 
 .xray-node-trigger {
   font-size: 11px;
-  color: var(--muted);
+  color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3297,9 +3297,9 @@ label.field {
 .xray-handle {
   width: 6px !important;
   height: 6px !important;
-  background: var(--accent) !important;
-  border: 1px solid #fff !important;
-  opacity: 0.7;
+  background: #6366f1 !important;
+  border: 1px solid #ffffff !important;
+  opacity: 0.85;
 }
 
 /* Legend */
@@ -3307,18 +3307,19 @@ label.field {
   position: absolute;
   bottom: 14px;
   left: 14px;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--line);
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 8px 12px;
   z-index: 10;
   font-size: 10.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .legend-title {
   font-weight: 700;
-  color: var(--muted);
+  color: #475569;
   margin-bottom: 5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3334,7 +3335,7 @@ label.field {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #cbd5e1;
+  color: #334155;
 }
 
 .legend-bar {
