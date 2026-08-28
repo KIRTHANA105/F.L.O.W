@@ -3,3 +3,6 @@ uvicorn[standard]
 google-genai
 python-dotenv
 faker
+networkx
+pypdf
+python-multipart

@@ -1,8 +1,12 @@
 __pycache__/
 *.pyc
+.venv/
+venv/
+backend/.venv/
 backend/.env
 backend/flow.db
 backend/llm_cache.db
 *.db
 node_modules/
 frontend/dist/
+.vite/
