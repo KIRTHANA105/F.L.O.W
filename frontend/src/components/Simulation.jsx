@@ -64,10 +64,15 @@ export default function Simulation({
           (decisionPending?.proposal?.id === w.id && w.status !== "active")
       );
       setWorkflows(simWfs);
-      const targetId = (initialWorkflowId && simWfs.some((w) => w.id === initialWorkflowId))
-        ? initialWorkflowId
-        : (simWfs[0]?.id || null);
-      setSelectedWfId((prev) => (simWfs.some((w) => w.id === prev) ? prev : targetId));
+      setSelectedWfId((prev) => {
+        if (initialWorkflowId && simWfs.some((w) => w.id === initialWorkflowId)) {
+          return initialWorkflowId;
+        }
+        if (prev && simWfs.some((w) => w.id === prev)) {
+          return prev;
+        }
+        return simWfs[0]?.id || null;
+      });
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load workflows");
@@ -79,6 +84,14 @@ export default function Simulation({
   useEffect(() => {
     loadWorkflows();
   }, [loadWorkflows]);
+
+  // When a new workflow is sent for simulation, select it
+  useEffect(() => {
+    if (initialWorkflowId) {
+      setSelectedWfId(initialWorkflowId);
+      handleSelectWorkflow(initialWorkflowId);
+    }
+  }, [initialWorkflowId]);
 
   const handleRunSimulation = async (wfId, forceReRun = false) => {
     const idToRun = wfId || selectedWfId;
