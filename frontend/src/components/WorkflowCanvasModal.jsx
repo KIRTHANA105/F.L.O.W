@@ -600,51 +600,8 @@ function WorkflowCanvasInner({
           </div>
         </div>
 
-        {/* Simulation Scenario Player */}
+        {/* Canvas Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {scenarios.length > 0 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "4px 8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-              <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 500 }}>Trace:</span>
-              <select
-                value={activeScenarioIdx}
-                onChange={(e) => handleStartReplay(Number(e.target.value))}
-                style={{ fontSize: "12px", padding: "3px 6px", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#ffffff" }}
-              >
-                {scenarios.map((sc, i) => (
-                  <option key={i} value={i}>
-                    {sc.name || `Scenario ${i + 1}`} ({sc.outcome || "Passed"})
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn primary btn-sm"
-                onClick={() => handleStartReplay(activeScenarioIdx)}
-                disabled={animatingScenario}
-                style={{ padding: "3px 8px", fontSize: "11px" }}
-              >
-                {animatingScenario ? <Spinner /> : "▶ Replay"}
-              </button>
-              <button
-                className="btn ghost btn-sm"
-                onClick={handleExecuteSimulation}
-                disabled={simRunning}
-                title="Re-run simulation"
-                style={{ padding: "3px 6px", fontSize: "11px", color: "#6366f1" }}
-              >
-                {simRunning ? <Spinner /> : "↻ Run New"}
-              </button>
-            </div>
-          ) : (
-            <button
-              className="btn primary btn-sm"
-              onClick={handleExecuteSimulation}
-              disabled={simRunning}
-              style={{ fontSize: "12px", padding: "4px 12px", display: "flex", alignItems: "center", gap: "6px" }}
-            >
-              {simRunning ? <><Spinner /> Simulating…</> : "⚡ Run Simulator"}
-            </button>
-          )}
-
           <button
             className="btn ghost btn-sm"
             onClick={() => fitView({ padding: 0.2, duration: 300 })}
