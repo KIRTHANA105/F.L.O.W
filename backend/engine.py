@@ -89,22 +89,121 @@ def find_workflow_containing_target(workflows, dep_map, origin_wf, target_step):
     return None
 
 
-def evaluate_proposal(proposed, workflows, dep_map, policy_rules):
-    """The core reasoning: does `proposed` (a step sequence with an origin
-    step) fit the existing architecture and its policies?
+def _is_email_step(step):
+    name = (step.get("name") or "").lower()
+    op = (step.get("operation_id") or "").lower()
+    app = (step.get("app") or "").lower()
+    act = (step.get("action") or "").lower()
+    if op in ("gmail.send", "email.send", "sendgrid.send", "outlook.send"):
+        return True
+    if app in ("gmail", "sendgrid", "outlook", "mailchimp"):
+        return True
+    if act in ("send_email", "send_mail"):
+        return True
+    # If op is another app like slack.post, sheets.append, it is NOT an email step even if label has word email
+    if op and not any(k in op for k in ("gmail", "email", "mail", "sendgrid")):
+        return False
+    return name in ("send email", "send an email", "email customer", "send notification email") or (
+        "email" in name and not any(k in name for k in ("slack", "sheet", "database", "crm", "post to"))
+    )
 
-    A conflict exists when the proposal jumps from a step owned by one
-    workflow straight to a step owned by a DIFFERENT, non-adjacent downstream
-    workflow, skipping the workflow(s) the existing graph places in between -
-    and a policy requires one of those skipped workflows' steps to happen
-    first.
+
+def _is_refund_step(step):
+    name = (step.get("name") or "").lower()
+    op = (step.get("operation_id") or "").lower()
+    app = (step.get("app") or "").lower()
+    act = (step.get("action") or "").lower()
+    if op in ("stripe.refund", "payment.refund", "charge.refund"):
+        return True
+    if act in ("refund", "process_refund", "issue_refund"):
+        return True
+    if "refund" in name and not any(k in name for k in ("request", "form", "ask", "initiate")):
+        return True
+    return False
+
+
+def _is_opt_out_guard(step):
+    name = (step.get("name") or "").lower()
+    cond = str(step.get("condition") or step.get("guard") or "").lower()
+    step_type = (step.get("type") or "").lower()
+    text_check = f"{name} {cond}"
+    return "opted_out" in text_check or "opt_out" in text_check or "unsubscribe" in text_check or "subscription_status" in text_check
+
+
+def _is_approval_step(step):
+    name = (step.get("name") or "").lower()
+    step_type = (step.get("type") or "").lower()
+    return "approval" in name or "approve" in name or step_type in ("approval", "human_approval", "manual_review")
+
+
+def check_intra_workflow_policies(proposed, policy_rules):
+    """Inspects step operations, condition guards, and approval gates within the workflow."""
+    steps = proposed.get("steps") or []
+    violated = []
+
+    has_opt_out_guard = any(_is_opt_out_guard(s) for s in steps)
+    has_approval = any(_is_approval_step(s) for s in steps)
+
+    for rule in policy_rules:
+        if not rule.get("active", True):
+            continue
+        compiled = rule.get("compiled") or {}
+        c_type = compiled.get("type")
+        rule_text = (rule.get("text") or "").lower()
+
+        # Policy Type 1: Email Opt-Out Guard Required
+        if c_type == "require_guard" and compiled.get("field") in ("opted_out", "opt_out") or (
+            "email" in rule_text and ("opted_out" in rule_text or "unsubscribed" in rule_text or "opt_out" in rule_text)
+        ):
+            has_email = any(_is_email_step(s) for s in steps)
+            if has_email and not has_opt_out_guard:
+                violated.append({
+                    **rule,
+                    "reason": "Workflow sends email without verifying contact opt-out / subscription status.",
+                    "required_guard": "opted_out == false",
+                })
+
+        # Policy Type 2: High Value / Unbounded Refund Approval Required
+        elif c_type in ("require_approval", "require_approval_above") or (
+            "refund" in rule_text and ("approval" in rule_text or "approve" in rule_text or "human" in rule_text)
+        ):
+            has_refund = any(_is_refund_step(s) for s in steps)
+            if has_refund and not has_approval:
+                violated.append({
+                    **rule,
+                    "reason": "Financial refund step executed without human approval gate.",
+                    "required_guard": "human_approval step before refund",
+                })
+
+    return violated
+
+
+def evaluate_proposal(proposed, workflows, dep_map, policy_rules):
+    """The core reasoning: does `proposed` fit the existing architecture and policies?
+    Checks:
+      1. Intra-workflow field & condition guards (email opt-out, refund approval, etc.)
+      2. Inter-workflow architectural ordering & skipped policy-required workflows.
     """
     steps = [s["name"] for s in proposed.get("steps", [])]
     origin_name = (proposed.get("origin_step") or (steps[0] if steps else "")).strip()
     target_step = steps[1] if len(steps) > 1 else None
 
+    # 1. Intra-workflow policy check
+    intra_violated = check_intra_workflow_policies(proposed, policy_rules)
+
     origin_wf = find_workflow_by_step(workflows, origin_name)
     if origin_wf is None:
+        if intra_violated:
+            rule = intra_violated[0]
+            return {
+                "status": "conflict",
+                "origin_workflow": None,
+                "target_workflow": None,
+                "existing_path": [],
+                "skipped_workflows": [],
+                "violated_rules": intra_violated,
+                "reasoning": f"Workflow violates company policy: \"{rule.get('text')}\" - {rule.get('reason', '')}",
+            }
         return {
             "status": "compatible",
             "origin_workflow": None,
@@ -122,6 +221,17 @@ def evaluate_proposal(proposed, workflows, dep_map, policy_rules):
     existing_path = build_process_path(workflows, dep_map, origin_wf["id"])
 
     if not target_step:
+        if intra_violated:
+            rule = intra_violated[0]
+            return {
+                "status": "conflict",
+                "origin_workflow": origin_wf,
+                "target_workflow": None,
+                "existing_path": existing_path,
+                "skipped_workflows": [],
+                "violated_rules": intra_violated,
+                "reasoning": f"Workflow violates company policy: \"{rule.get('text')}\" - {rule.get('reason', '')}",
+            }
         return {
             "status": "compatible",
             "origin_workflow": origin_wf,
@@ -138,7 +248,7 @@ def evaluate_proposal(proposed, workflows, dep_map, policy_rules):
     if target_wf is not None and target_wf["id"] != origin_wf["id"]:
         skipped_workflows = workflows_between(existing_path, origin_wf["id"], target_wf["id"])
 
-    violated = []
+    inter_violated = []
     if skipped_workflows:
         skipped_names = {wf["name"] for wf in skipped_workflows}
         for rule in policy_rules:
@@ -150,22 +260,27 @@ def evaluate_proposal(proposed, workflows, dep_map, policy_rules):
             required_workflow = compiled.get("required_workflow")
             before = compiled.get("before_step")
             if required_workflow in skipped_names and before == target_step:
-                violated.append(rule)
+                inter_violated.append(rule)
 
-    if skipped_workflows and violated:
+    all_violated = intra_violated + inter_violated
+
+    if all_violated:
+        if intra_violated:
+            rule = intra_violated[0]
+            reasoning = f"Workflow violates company policy: \"{rule.get('text')}\" - {rule.get('reason', '')}"
+        else:
+            reasoning = _conflict_reasoning(origin_name, target_step, skipped_workflows, inter_violated)
         return {
             "status": "conflict",
             "origin_workflow": origin_wf,
             "target_workflow": target_wf,
             "existing_path": existing_path,
             "skipped_workflows": skipped_workflows,
-            "violated_rules": violated,
-            "reasoning": _conflict_reasoning(origin_name, target_step, skipped_workflows, violated),
+            "violated_rules": all_violated,
+            "reasoning": reasoning,
         }
 
     if skipped_workflows:
-        # Skips a stage but nothing in policy actually forbids it - flag as a
-        # softer warning rather than a hard conflict.
         return {
             "status": "warning",
             "origin_workflow": origin_wf,
