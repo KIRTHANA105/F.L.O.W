@@ -29,6 +29,7 @@ export default function Simulation({
   const [simulating, setSimulating] = useState(false);
   const [autoFixing, setAutoFixing] = useState(false);
   const [simReport, setSimReport] = useState(null);
+  const [simCache, setSimCache] = useState({});
   const [conflicts, setConflicts] = useState([]);
   const [activeScenarioIdx, setActiveScenarioIdx] = useState(0);
   const [replayStepIdx, setReplayStepIdx] = useState(null);
@@ -52,19 +53,21 @@ export default function Simulation({
       if (decisionPending?.proposal && !allWfs.some((w) => w.id === decisionPending.proposal.id)) {
         allWfs = [decisionPending.proposal, ...allWfs];
       }
-      // ONLY include workflows that are actively queued/sent for simulation
+      // ONLY include workflows that are actively queued/sent for simulation and NOT active
       const simWfs = allWfs.filter(
         (w) =>
           w.status === "in_progress" ||
           w.status === "simulating" ||
           w.status === "review" ||
           w.status === "needs_review" ||
-          w.id === initialWorkflowId ||
-          (decisionPending?.proposal?.id === w.id)
+          (initialWorkflowId && w.id === initialWorkflowId && w.status !== "active") ||
+          (decisionPending?.proposal?.id === w.id && w.status !== "active")
       );
       setWorkflows(simWfs);
-      const targetId = initialWorkflowId || simWfs[0]?.id || null;
-      setSelectedWfId(targetId);
+      const targetId = (initialWorkflowId && simWfs.some((w) => w.id === initialWorkflowId))
+        ? initialWorkflowId
+        : (simWfs[0]?.id || null);
+      setSelectedWfId((prev) => (simWfs.some((w) => w.id === prev) ? prev : targetId));
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load workflows");
@@ -77,9 +80,17 @@ export default function Simulation({
     loadWorkflows();
   }, [loadWorkflows]);
 
-  const handleRunSimulation = async (wfId) => {
+  const handleRunSimulation = async (wfId, forceReRun = false) => {
     const idToRun = wfId || selectedWfId;
     if (!idToRun) return;
+
+    // Reuse computed simulation report if already in cache and not forced
+    if (!forceReRun && simCache[idToRun]) {
+      setSimReport(simCache[idToRun]);
+      setActiveScenarioIdx(0);
+      return;
+    }
+
     triggerAiGlow?.();
     setSimulating(true);
     setError("");
@@ -87,8 +98,10 @@ export default function Simulation({
     setIsPlaying(false);
     try {
       const data = await api.simulateWorkflow(idToRun);
+      setSimCache((prev) => ({ ...prev, [idToRun]: data }));
       setSimReport(data);
       setActiveScenarioIdx(0);
+      await loadWorkflows();
     } catch (e) {
       setError(e.message || "Simulation run failed");
     } finally {
@@ -110,9 +123,9 @@ export default function Simulation({
         await onActivate(selectedWorkflow);
       } else {
         await api.adoptWorkflow(selectedWorkflow.id);
-        await loadWorkflows();
-        onNavigate?.("dashboard");
       }
+      await loadWorkflows();
+      onNavigate?.("dashboard");
     } catch (e) {
       setError(e.message || "Failed to activate workflow");
     }
@@ -138,7 +151,7 @@ export default function Simulation({
       }
       setSelectedWfId(newProposal.id);
       await loadWorkflows();
-      await handleRunSimulation(newProposal.id);
+      await handleRunSimulation(newProposal.id, true);
     } catch (e) {
       setError(e.message || "Failed to auto-fix workflow with AI");
     } finally {
@@ -146,12 +159,28 @@ export default function Simulation({
     }
   };
 
-  // Re-run or auto-run on workflow switch if report exists
-  const handleSelectWorkflow = (wfId) => {
+  // Switch workflow without re-calculating if cached
+  const handleSelectWorkflow = async (wfId) => {
     setSelectedWfId(wfId);
-    setSimReport(null);
     setReplayStepIdx(null);
     setIsPlaying(false);
+    if (simCache[wfId]) {
+      setSimReport(simCache[wfId]);
+      setActiveScenarioIdx(0);
+    } else {
+      try {
+        const last = await api.getLastSimulation(wfId);
+        if (last && last.workflow_id === wfId) {
+          setSimCache((prev) => ({ ...prev, [wfId]: last }));
+          setSimReport(last);
+          setActiveScenarioIdx(0);
+        } else {
+          setSimReport(null);
+        }
+      } catch {
+        setSimReport(null);
+      }
+    }
   };
 
   // Step-through replay logic
