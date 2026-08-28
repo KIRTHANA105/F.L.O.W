@@ -1,6 +1,6 @@
 // Port 8000 can be held by a stale socket on Windows; override with
 // VITE_API_BASE (e.g. VITE_API_BASE=http://127.0.0.1:8010) without a code change.
-const BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8010";
+const BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8010";
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
@@ -126,4 +126,13 @@ export const api = {
     }),
   reset: () => request("/api/reset", { method: "POST" }),
   health: () => request("/api/health"),
+
+  // --- AI Suggestions ---
+  suggestAutomation: (text) =>
+    request("/api/suggest-automation", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  suggestNextWorkflow: () =>
+    request("/api/suggest-next-workflow", { method: "POST" }),
 };

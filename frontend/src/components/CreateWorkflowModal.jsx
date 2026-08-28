@@ -11,6 +11,12 @@ export default function CreateWorkflowModal({
   const [text, setText] = useState(initialText || "");
   const [step, setStep] = useState("idle"); // idle | analyzing | evaluating | done
   const [error, setError] = useState("");
+
+  // Inline automation suggestions
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestTimer = useRef(null);
+
   const backdropRef = useRef(null);
 
   const handleBackdrop = (e) => {
@@ -23,10 +29,65 @@ export default function CreateWorkflowModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Debounced suggestion fetch — fires 800ms after user stops typing.
+  // Uses AbortController so every new keystroke cancels the prior in-flight request.
+  useEffect(() => {
+    if (step !== "idle") return;
+    clearTimeout(suggestTimer.current);
+    setSuggestLoading(false);
+
+    if (!text || text.length < 15) {
+      setSuggestions([]);
+      return;
+    }
+
+    // Create a controller for this request cycle
+    const controller = new AbortController();
+
+    suggestTimer.current = setTimeout(async () => {
+      setSuggestLoading(true);
+      try {
+        const res = await fetch("http://127.0.0.1:8010/api/suggest-automation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("suggest failed");
+        const data = await res.json();
+        setSuggestions(data.suggestions || []);
+      } catch (e) {
+        if (e.name !== "AbortError") setSuggestions([]);
+      } finally {
+        // Only clear loading state if this controller wasn't aborted
+        if (!controller.signal.aborted) setSuggestLoading(false);
+      }
+    }, 800);
+
+    // Cleanup: clear timer AND abort any in-flight fetch
+    return () => {
+      clearTimeout(suggestTimer.current);
+      controller.abort();
+    };
+  }, [text, step]);
+
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    setSuggestions([]);
+  };
+
+  const handleSuggestionClick = (s) => {
+    // Extract the plain-English description from the suggestion chip
+    // Chips are like "Trigger: X → Action: Y". We expand them into a full sentence.
+    setText(s);
+    setSuggestions([]);
+  };
+
   const handleAnalyze = async () => {
     if (!text.trim()) return;
     triggerAiGlow?.();
     setError("");
+    setSuggestions([]);
     setStep("analyzing");
     try {
       const analyzeResult = await api.analyze(text.trim());
@@ -35,7 +96,7 @@ export default function CreateWorkflowModal({
       setStep("evaluating");
       const evalResult = await api.evaluate(proposal.id);
 
-      // Pass everything to parent → navigate to Decision Gate
+      // Pass everything to parent → stay on Dashboard, show new "created" card
       onResult({
         proposal,
         evaluation: evalResult,
@@ -75,16 +136,74 @@ export default function CreateWorkflowModal({
         <div className="modal-body">
           <ErrorNote message={error} />
 
-          <textarea
-            id="workflow-description"
-            className="workflow-textarea"
-            rows={5}
-            value={text}
-            disabled={step !== "idle"}
-            placeholder="e.g. When a form is submitted, lookup the contact in HubSpot and update the lifecycle stage…"
-            onChange={(e) => setText(e.target.value)}
-            autoFocus
-          />
+          <div style={{ position: "relative" }}>
+            <textarea
+              id="workflow-description"
+              className="workflow-textarea"
+              rows={5}
+              value={text}
+              disabled={step !== "idle"}
+              placeholder="e.g. When a form is submitted, lookup the contact in HubSpot and update the lifecycle stage…"
+              onChange={handleTextChange}
+              autoFocus
+            />
+            {/* AI thinking indicator */}
+            {suggestLoading && step === "idle" && (
+              <div style={{
+                position: "absolute", bottom: 10, right: 12,
+                display: "flex", alignItems: "center", gap: 5,
+                fontSize: 11, color: "#6366f1", fontWeight: 600,
+              }}>
+                <Spinner /> ✦ AI is thinking…
+              </div>
+            )}
+          </div>
+
+          {/* Inline Automation Suggestion Chips */}
+          {suggestions.length > 0 && step === "idle" && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: "#6366f1",
+                textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6,
+                display: "flex", alignItems: "center", gap: 5,
+              }}>
+                <span>✦</span> Automation Suggestions — click to populate
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleSuggestionClick(s)}
+                    style={{
+                      background: "linear-gradient(135deg, rgba(99,102,241,0.06), rgba(99,102,241,0.02))",
+                      border: "1px solid rgba(99,102,241,0.25)",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      fontSize: 12.5,
+                      color: "#1e293b",
+                      fontWeight: 500,
+                      lineHeight: 1.4,
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.06))";
+                      e.currentTarget.style.borderColor = "rgba(99,102,241,0.5)";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = "linear-gradient(135deg, rgba(99,102,241,0.06), rgba(99,102,241,0.02))";
+                      e.currentTarget.style.borderColor = "rgba(99,102,241,0.25)";
+                    }}
+                  >
+                    <span style={{ color: "#6366f1", marginRight: 6 }}>✦</span>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
             <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>

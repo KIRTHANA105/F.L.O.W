@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import Dashboard from "./components/Dashboard";
-import DecisionGate from "./components/DecisionGate";
-import Conflicts from "./components/Conflicts";
-import Explorer from "./components/Explorer";
 import Policies from "./components/Policies";
 import Simulation from "./components/Simulation";
 import DependencyGraph from "./components/DependencyGraph";
@@ -11,10 +8,8 @@ import Auth from "./pages/Auth";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
-  { id: "memory", label: "Process Memory" },
   { id: "simulation", label: "Simulation" },
   { id: "graph", label: "Dependency Graph" },
-  { id: "conflicts", label: "Conflicts" },
   { id: "policies", label: "Policies" },
 ];
 
@@ -26,9 +21,9 @@ export default function App() {
   const [aiActive, setAiActive] = useState(false);
   const [welcome, setWelcome] = useState("");
   const [justDeployed, setJustDeployed] = useState("");
-  // pendingDecision = { proposal, evaluation, rawText } — created by CreateWorkflowModal
-  const [pendingDecision, setPendingDecision] = useState(null);
-  const [lastSimReport, setLastSimReport] = useState(null);
+  // pendingProposal = { proposal, evaluation, rawText } — created by CreateWorkflowModal,
+  // consumed once by Simulation so a fresh proposal doesn't need a re-fetch.
+  const [pendingProposal, setPendingProposal] = useState(null);
   const [simWorkflowId, setSimWorkflowId] = useState(null);
   const glowTimer = useRef(null);
 
@@ -37,19 +32,6 @@ export default function App() {
     clearTimeout(glowTimer.current);
     glowTimer.current = setTimeout(() => setAiActive(false), durationMs);
   }, []);
-
-  const handleNavigateToSimulation = async (wfId) => {
-    if (wfId) {
-      setSimWorkflowId(wfId);
-      try {
-        await api.updateWorkflowStatus(wfId, "in_progress");
-      } catch (err) {
-        console.error("Failed to update status to in_progress", err);
-      }
-    }
-    await refresh();
-    setTab("simulation");
-  };
 
   useEffect(() => {
     triggerAiGlow(7000);
@@ -85,59 +67,43 @@ export default function App() {
   }
 
   /**
-   * Called by CreateWorkflowModal when analyze + evaluate is done.
-   * Lands directly on the DECISION GATE screen before activating.
+   * Called by CreateWorkflowModal once analyze + evaluate finish.
+   * We stay on the Dashboard so the user sees the new "CREATED" card.
+   * The user then navigates to Simulation manually via the card detail modal.
    */
-  const handleWorkflowResult = (result) => {
-    setPendingDecision(result);
-    setLastSimReport(null);
-    setTab("gate");
+  const handleWorkflowResult = async (result) => {
+    setPendingProposal(result);
+    setSimWorkflowId(result.proposal.id);
+    // Refresh dashboard to show the new "created" card — do NOT auto-navigate.
+    await refresh();
   };
 
-  /**
-   * Called when a workflow is activated from the Decision Gate.
-   */
-  const handleAdopt = async (adoptedWorkflow, overrideLog) => {
-    try {
-      await api.adoptWorkflow(adoptedWorkflow.id, null, null);
-    } catch (err) {
-      console.error("Adoption call error", err);
-    }
+  const handleNavigateToSimulation = async (wfId) => {
+    if (wfId) setSimWorkflowId(wfId);
     await refresh();
-    if (adoptedWorkflow?.name) {
-      setJustDeployed(adoptedWorkflow.name);
+    setTab("simulation");
+  };
+
+  const handleAdopted = async (workflow) => {
+    await refresh();
+    if (workflow?.name) {
+      setJustDeployed(workflow.name);
       setTimeout(() => setJustDeployed(""), 8000);
     }
-    setPendingDecision(null);
-    setLastSimReport(null);
+    setPendingProposal(null);
     setTab("dashboard");
   };
 
-  /**
-   * Called when a proposed workflow is rejected / discarded.
-   */
-  const handleReject = async () => {
-    if (pendingDecision?.proposal?.id) {
-      try {
-        await api.rejectWorkflow(pendingDecision.proposal.id);
-      } catch (err) {
-        console.error("Reject call error", err);
-      }
-    }
-    setPendingDecision(null);
-    setLastSimReport(null);
-    setTab("dashboard");
+  // Direct-execution shortcut from the workflow detail modal (no simulation).
+  const handleDirectAdopt = async (workflow) => {
+    const adopted = await api.adoptWorkflow(workflow.id, null, null);
+    await handleAdopted(adopted.workflow);
   };
 
-  /**
-   * Called from Simulation when returning to Decision Gate with results.
-   */
-  const handleReturnToDecision = (report) => {
-    setLastSimReport(report);
-    setTab("gate");
+  const handleRejected = async () => {
+    setPendingProposal(null);
+    await refresh();
   };
-
-  const decisionActive = !!pendingDecision;
 
   return (
     <div className={aiActive ? "ai-glow-active app" : "app"}>
@@ -162,19 +128,6 @@ export default function App() {
               {t.label}
             </button>
           ))}
-          {decisionActive && (
-            <button
-              className={`tab ${tab === "gate" ? "active" : ""}`}
-              onClick={() => setTab("gate")}
-              style={{
-                background: "rgba(99, 102, 241, 0.1)",
-                color: "#6366f1",
-                border: "1px solid #c7d2fe",
-              }}
-            >
-              Decision Gate <span className="badge-count">1</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -185,39 +138,20 @@ export default function App() {
           workflows={workflows}
           onRefresh={refresh}
           onCreateWorkflow={handleWorkflowResult}
-          onAdopt={handleAdopt}
-          onNavigateToSim={handleNavigateToSimulation}
+          onAdopt={handleDirectAdopt}
           onRecalculate={handleWorkflowResult}
+          onNavigateToSim={handleNavigateToSimulation}
           triggerAiGlow={triggerAiGlow}
           justDeployed={justDeployed}
         />
       )}
 
-      {tab === "gate" && (
-        <DecisionGate
-          pending={pendingDecision}
-          lastSimReport={lastSimReport}
-          onActivate={handleAdopt}
-          onSimulate={handleNavigateToSimulation}
-          onReject={handleReject}
-          onRecalculate={handleWorkflowResult}
-          onNavigate={(newTab, wfId) => {
-            if (wfId) setSimWorkflowId(wfId);
-            setTab(newTab);
-          }}
-          triggerAiGlow={triggerAiGlow}
-        />
-      )}
-
-      {tab === "memory" && <Explorer />}
-
       {tab === "simulation" && (
         <Simulation
           initialWorkflowId={simWorkflowId}
-          decisionPending={pendingDecision}
-          onReturnToDecision={decisionActive ? handleReturnToDecision : null}
-          onActivate={handleAdopt}
-          onRecalculate={handleWorkflowResult}
+          pendingProposal={pendingProposal}
+          onAdopted={handleAdopted}
+          onRejected={handleRejected}
           onNavigate={(newTab, wfId) => {
             if (wfId) setSimWorkflowId(wfId);
             setTab(newTab);
@@ -229,16 +163,6 @@ export default function App() {
       {tab === "graph" && (
         <DependencyGraph
           onNavigateToSimulation={handleNavigateToSimulation}
-          triggerAiGlow={triggerAiGlow}
-        />
-      )}
-
-      {tab === "conflicts" && (
-        <Conflicts
-          onNavigate={(newTab, wfId) => {
-            if (wfId) setSimWorkflowId(wfId);
-            setTab(newTab);
-          }}
           triggerAiGlow={triggerAiGlow}
         />
       )}

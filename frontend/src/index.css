@@ -4437,7 +4437,127 @@ label.field {
   margin-bottom: 8px;
 }
 
+/* =======================================================================
+   ANIMATIONS
+   ======================================================================= */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
+@keyframes shimmerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 
+/* =======================================================================
+   SECONDARY BUTTON VARIANT
+   ======================================================================= */
+.btn.secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+}
 
+.btn.secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+/* =======================================================================
+   AI SUGGESTION CARD (Dashboard)
+   ======================================================================= */
+.ai-suggestion-card {
+  animation: fadeSlideIn 0.35s ease;
+}
+
+.ai-suggestion-card:hover {
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.1);
+}
+
+/* =======================================================================
+   AUTOMATION SUGGESTION CHIPS (CreateWorkflowModal)
+   ======================================================================= */
+.automation-suggestion-chip {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(99, 102, 241, 0.02));
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: #1e293b;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.automation-suggestion-chip:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06));
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+/* =======================================================================
+   PROCESS DEPENDENCIES (DependencyGraph page)
+   ======================================================================= */
+.process-dep-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  flex-wrap: wrap;
+  transition: background 0.15s ease;
+}
+
+.process-dep-row:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #cbd5e1;
+}
+
+.process-dep-from,
+.process-dep-to {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.process-dep-rel {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* =======================================================================
+   SIMULATION SIDEBAR — status and steps filter pill rows
+   ======================================================================= */
+.sim-filter-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px 0 2px;
+}
+
+.sim-filter-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  align-self: center;
+}
 

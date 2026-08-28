@@ -101,8 +101,8 @@ function getLayoutedElements(nodes, edges, direction = "LR") {
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({
     rankdir: direction,
-    nodesep: 35,
-    ranksep: 75,
+    nodesep: 50,
+    ranksep: 140,
     marginx: 30,
     marginy: 30,
   });
@@ -134,6 +134,7 @@ function getLayoutedElements(nodes, edges, direction = "LR") {
 // ─── Main Dependency Graph Component ─────────────────────────────────────────
 export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow }) {
   const [graphData, setGraphData] = useState(null);
+  const [processMemoryData, setProcessMemoryData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -151,8 +152,12 @@ export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow 
   const loadGraph = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.getGraph();
+      const [data, memData] = await Promise.all([
+        api.getGraph(),
+        api.processMemory().catch(() => null),
+      ]);
       setGraphData(data);
+      setProcessMemoryData(memData);
       setError("");
     } catch (e) {
       setError(e.message || "Failed to load workflow dependency graph");
@@ -306,16 +311,18 @@ export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow 
         },
         label: (e.fields || []).join(", "),
         labelStyle: {
-          fontSize: 10,
-          fill: isDimmed ? "rgba(0,0,0,0.15)" : "#334155",
-          fontWeight: 600,
+          fontSize: 12,
+          fill: isDimmed ? "rgba(0,0,0,0.15)" : "#0f172a",
+          fontWeight: 700,
         },
         labelBgStyle: {
           fill: isDimmed ? "transparent" : "#ffffff",
-          fillOpacity: 0.95,
-          rx: 4,
-          ry: 4,
+          fillOpacity: 1,
+          stroke: isDimmed ? "transparent" : (isCycleEdge ? "#ef4444" : isOverlap ? "#f59e0b" : "#c7d2fe"),
+          strokeWidth: 1,
         },
+        labelBgPadding: [6, 4],
+        labelBgBorderRadius: 5,
       };
     });
 
@@ -414,6 +421,10 @@ export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow 
           <div className="xray-stat-card">
             <span className="xray-stat-num">{stats.total}</span>
             <span className="xray-stat-lbl">Total Workflows</span>
+          </div>
+          <div className="xray-stat-card">
+            <span className="xray-stat-num">{processMemoryData?.edges?.length ?? 0}</span>
+            <span className="xray-stat-lbl">Process Connections</span>
           </div>
           <div className="xray-stat-card">
             <span className={`xray-stat-num ${stats.cycles > 0 ? "stat-danger" : "stat-ok"}`}>
@@ -708,6 +719,65 @@ export default function DependencyGraph({ onNavigateToSimulation, triggerAiGlow 
                 <div className="shelf-card-trigger">⚡ {node.trigger_label}</div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Process Dependencies Section ───────────────────────────────────── */}
+      {processMemoryData && (processMemoryData.edges || []).length > 0 && (
+        <div className="xray-shelf" style={{ marginTop: 24 }}>
+          <div className="xray-shelf-header">
+            <h4>Process Dependencies</h4>
+            <span className="xray-shelf-sub">
+              {processMemoryData.edges.length} direct workflow relationship{processMemoryData.edges.length !== 1 ? "s" : ""} tracked in process memory
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {processMemoryData.edges.map((edge) => {
+              const allNodes = (processMemoryData.departments || []).flatMap((d) => d.workflows || []);
+              const fromWf = allNodes.find((w) => w.id === edge.from_workflow_id);
+              const toWf = allNodes.find((w) => w.id === edge.to_workflow_id);
+              const relColors = {
+                precedes: { stroke: "#6366f1", bg: "#eff0ff" },
+                requires: { stroke: "#ef4444", bg: "#fef2f2" },
+                triggers: { stroke: "#3b82f6", bg: "#eff6ff" },
+              };
+              const relStyle = relColors[edge.relationship] || relColors.precedes;
+              return (
+                <div
+                  key={edge.id}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    background: "rgba(255,255,255,0.6)",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 8,
+                    padding: "10px 16px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: "#1e293b", fontSize: 13 }}>
+                    {fromWf?.name || `#${edge.from_workflow_id}`}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "2px 10px",
+                    borderRadius: 20, background: relStyle.bg,
+                    color: relStyle.stroke, border: `1px solid ${relStyle.stroke}44`,
+                    textTransform: "uppercase", letterSpacing: "0.3px",
+                  }}>
+                    {edge.relationship}
+                  </span>
+                  <span style={{ color: relStyle.stroke, fontSize: 13 }}>→</span>
+                  <span style={{ fontWeight: 600, color: "#1e293b", fontSize: 13 }}>
+                    {toWf?.name || `#${edge.to_workflow_id}`}
+                  </span>
+                  {edge.label && (
+                    <span style={{ fontSize: 11.5, color: "#64748b", fontStyle: "italic", marginLeft: 4 }}>
+                      — {edge.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

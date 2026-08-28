@@ -607,4 +607,118 @@ def seed_sample_workflows():
     }
 
 
+# --- Automation Suggestions (inline, while user types) -----------------------
+SUGGEST_AUTOMATION_SYSTEM = """You are a workflow automation advisor for a B2B SaaS company (Nexora Technologies).
+Given a partial or complete natural-language description of a process, suggest up to 3 concrete automation ideas.
 
+Each suggestion must be a tight, actionable one-liner following the pattern:
+"Trigger: <event> → Action: <step1> → <step2> (→ ...)"
+
+Keep each suggestion under 20 words. Only include suggestions that are plausible automations
+for departments: Sales, Finance, Legal, Customer Success, Support, Procurement, Operations.
+Return JSON with a single key "suggestions" containing an array of strings."""
+
+SUGGEST_AUTOMATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "suggestions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": 3,
+        }
+    },
+    "required": ["suggestions"],
+}
+
+
+class SuggestAutomationRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/suggest-automation")
+def suggest_automation(req: SuggestAutomationRequest):
+    text = req.text.strip()
+    if not text or len(text) < 10:
+        return {"suggestions": []}
+    try:
+        result = llm.llm_json(
+            "suggest-automation",
+            f"Partial workflow description: \"{text}\"",
+            system=SUGGEST_AUTOMATION_SYSTEM,
+            schema=SUGGEST_AUTOMATION_SCHEMA,
+            max_tokens=400,
+        )
+        return {"suggestions": result.get("suggestions", [])}
+    except llm.LLMError:
+        return {"suggestions": []}
+
+
+# --- Suggest Next Workflow (policy + history aware) --------------------------
+SUGGEST_NEXT_SYSTEM = """You are a business process strategist for a B2B SaaS company (Nexora Technologies).
+Given the company's existing automated workflows and active policy rules, identify the single
+most impactful workflow they should automate next.
+
+Think about:
+- Gaps in coverage (departments or transitions not yet automated)
+- Policy rules that aren't yet enforced by automation
+- Common hand-offs between workflows that could be linked
+
+Return JSON with exactly these fields:
+- "name": short workflow name (max 5 words)
+- "department": one of Sales, Finance, Legal, Customer Success, Support, Procurement, Operations
+- "rationale": 2-3 sentences explaining WHY this is the best next automation (mention specific existing workflows or policy rules by name)
+- "suggested_text": the exact natural-language description a user would type into the workflow creation box (1-2 sentences, plain English, no technical jargon)"""
+
+SUGGEST_NEXT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "department": {
+            "type": "string",
+            "enum": ["Sales", "Finance", "Legal", "Customer Success", "Support", "Procurement", "Operations"],
+        },
+        "rationale": {"type": "string"},
+        "suggested_text": {"type": "string"},
+    },
+    "required": ["name", "department", "rationale", "suggested_text"],
+}
+
+
+@app.post("/api/suggest-next-workflow")
+def suggest_next_workflow():
+    workflows = db.list_workflows(include_proposed=False)
+    policy_rules = db.list_policy_rules(active_only=True)
+
+    if not policy_rules:
+        raise HTTPException(
+            status_code=422,
+            detail="NO_POLICY",
+        )
+
+    wf_summary = "\n".join(
+        f"- [{wf['department']}] {wf['name']}: {wf['description']} ({len(wf['steps'])} steps)"
+        for wf in workflows
+    ) or "No workflows yet."
+
+    policy_summary = "\n".join(
+        f"- [{r['department']}] {r['title']}: {r['text']}"
+        for r in policy_rules[:20]  # cap to avoid token overflow
+    )
+
+    prompt = (
+        f"Existing workflows:\n{wf_summary}\n\n"
+        f"Active policy rules:\n{policy_summary}"
+    )
+
+    try:
+        result = llm.llm_json(
+            "suggest-next-workflow",
+            prompt,
+            system=SUGGEST_NEXT_SYSTEM,
+            schema=SUGGEST_NEXT_SCHEMA,
+            max_tokens=600,
+        )
+        STATS["llm_calls"] += 1
+        return result
+    except llm.LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))

@@ -4,8 +4,5 @@ google-genai
 python-dotenv
 faker
 networkx
-<<<<<<< HEAD
-=======
 pypdf
->>>>>>> 49495978c7e79a38644e32f250c0502d8191bc7a
 python-multipart
