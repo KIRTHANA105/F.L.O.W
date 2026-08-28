@@ -137,7 +137,7 @@ def get_workflow(workflow_id):
     return _row_to_workflow(row) if row else None
 
 
-def list_workflows(include_proposed=False):
+def list_workflows(include_proposed=True):
     conn = connect()
     sql = "SELECT * FROM workflows"
     if not include_proposed:

@@ -172,17 +172,17 @@ export default function WorkflowDetailModal({
             <button
               className="btn primary btn-sm"
               onClick={async () => {
+                try {
+                  await api.updateWorkflowStatus(workflow.id, "in_progress");
+                  workflow.status = "in_progress";
+                } catch (err) {
+                  console.error("Failed to set in_progress status", err);
+                }
                 onClose();
                 if (onNavigateToSim) {
                   await onNavigateToSim(workflow.id);
-                } else {
-                  try {
-                    await api.updateWorkflowStatus(workflow.id, "in_progress");
-                    onRefresh?.();
-                  } catch (err) {
-                    console.error("Failed to set in_progress status", err);
-                  }
                 }
+                onRefresh?.();
               }}
               style={{ fontWeight: 600, fontSize: "12px", padding: "6px 14px" }}
             >

@@ -89,8 +89,8 @@ def reset_demo():
 
 # --- Workflows (Dashboard + detail modal) -----------------------------------
 @app.get("/api/workflows")
-def list_workflows(include_proposed: bool = False):
-    workflows = db.list_workflows(include_proposed=include_proposed)
+def list_workflows(include_proposed: bool = True):
+    workflows = db.list_workflows(include_proposed=True)
     for wf in workflows:
         wf["step_count"] = len(wf["steps"])
     return {"workflows": workflows}
